@@ -51,9 +51,11 @@ chord/key engines live in Python; OpenTUI gives a fast, modern TUI. We **depend 
    and are required to run the recognizers. essentia is **AGPL-3.0**. The previous
    plan's "madmom MIT" was wrong.
 2. **Install reality.** madmom 0.16.1 (Nov 2018, sdist-only) targets ≤Py3.7, uses
-   `np.float`/Cython<3, and gets **<70% clean-install success even fully pinned**
-   (Py3.9 / numpy<1.24 / scipy<1.13 / Cython<3, or git main). It cannot be the
-   default dependency. The previous "Py3.10–3.12 / numpy<2" was wrong.
+   `np.float`/Cython<3, and is install-fragile in general (**<70% clean-install on a
+   stranger's machine**). The **validated recipe** (Phase-0 probe, `docs/probe-matrix.md`)
+   is Py3.9 / numpy<1.24 / scipy<1.13 / Cython<3 + the **PyPI 0.16.1 sdist** (which
+   bundles the models — no git submodule fetch needed). The previous "Py3.10–3.12 /
+   numpy<2 / git main" guidance was wrong.
 3. **Therefore (given the user wants ~80% out-of-box, personal use, single
    platform):** **madmom is the v1 DEFAULT accuracy engine** — viable because it only
    has to install on one machine (yours). **librosa (ISC, always installs) is demoted
@@ -85,7 +87,8 @@ and essentia (AGPL) engines usable at all.
 4. **Strike "`active/personal-library` precedent"** → that path **does not exist**;
    use `finance/` or `free-claude-code/` for the uv precedent.
 5. **Strike "Py3.10–3.12 / numpy<2"** → madmom pin is ≤Py3.9 / numpy<1.24 / scipy<1.13
-   / Cython<3 / git main, isolated in an optional extra.
+   / Cython<3 / pinned PyPI sdist 0.16.1, installed via a scripted `uv pip install
+   --no-build-isolation` (not a uv extra), never in the clean-core lock.
 6. **Strike "chroma-based 7th/extension inference"** → snake oil (chroma can't separate
    maj from maj7). Extended = **refused at MVP** (triads only) with an honest disabled
    toggle; real extended deferred to Phase 4a (Chordino/NNLS or torch, when a checkpoint exists).
@@ -224,7 +227,7 @@ chordTUI/                       # incubation/ first; promote to active/ after Ph
 │   ├── hooks/useAnalysis.ts    # state machine; ONE AbortController per run
 │   └── components/             # App, Header, KeyPanel, ChordTimeline(scrollbox), ProgressionPanel, FilePicker, StatusBar
 ├── engine/                     # Python sidecar (uv-managed)
-│   ├── pyproject.toml          # core deps clean; optional extras [madmom],[essentia]
+│   ├── pyproject.toml          # core deps clean; madmom/essentia = scripted installs (not uv extras), in comments
 │   ├── uv.lock                 # committed; locks ONLY the clean core
 │   ├── schema.json             # JSON Schema mirror of types.ts
 │   ├── mock_sidecar.py         # Phase-0 deliverable
@@ -237,9 +240,11 @@ chordTUI/                       # incubation/ first; promote to active/ after Ph
 ```
 
 **Dependency policy:** core (always installs, clean) = `librosa`, `numpy`, `scipy`,
-`soundfile`. Optional extras `[madmom]` (NC notice) and `[essentia]` (AGPL banner)
-hold their constraints, isolated from core. Committed `uv.lock` locks **only** the
-clean core (default `uv sync` pulls zero NC/AGPL). `bun.lock` exact; v1 ships
+`soundfile`. madmom and essentia are **NOT uv extras** — they are installed by
+`chord setup` via a scripted `uv pip install` (madmom needs `--no-build-isolation`;
+recipe in `docs/probe-matrix.md`) and are documented as comments in `pyproject.toml`,
+so they never enter the resolved graph. Committed `uv.lock` locks **only** the clean
+core (default `uv sync` pulls zero NC/AGPL). `bun.lock` exact; v1 ships
 macOS-arm64 (the `bun run` source path stays cross-platform).
 
 ## 6. Install & launch story
@@ -357,9 +362,14 @@ mini-map, multi-platform builds (beyond macOS-arm64).
 ## 10. Risks (top)
 
 1. **madmom won't install on a clean 2026 machine** (<70% even pinned) — biggest stall
-   risk. Mitigated by librosa default + madmom opt-in, never in the blocking path.
+   risk. `chord setup` does install madmom by default (with NC consent) for the ~80%
+   goal, but it is mitigated by: librosa always installs as the clean base, the JSON
+   contract is engine-agnostic, the madmom **CI** accuracy gate runs nightly/non-blocking
+   (never blocks a PR), and a failed madmom install degrades the tool to librosa rather
+   than breaking it.
 2. **NC/AGPL exposure on a public repo** — gated on Open decision (a); clean-core lock,
-   opt-in extras, banners. Critical-if-commercial, low-if-personal.
+   scripted opt-in installs (madmom/essentia are not in the lock), banners.
+   Critical-if-commercial, low-if-personal.
 3. **`bun build --compile` + OpenTUI native deps unverified** — Phase-0 probe; fall back
    to the `bun run` source path.
 4. **Accuracy underdelivery** — librosa floor is honest-but-weak; set expectations;

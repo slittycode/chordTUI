@@ -1,6 +1,8 @@
 """Python side of the contract round-trip: mock sidecar output must validate against
 engine/schema.json, and satisfy the gap-free invariant that JSON Schema cannot express."""
+import importlib.util
 import json
+import math
 import pathlib
 import subprocess
 import sys
@@ -13,6 +15,13 @@ MOCK = ROOT / "engine" / "mock_sidecar.py"
 SCHEMA = json.loads((ROOT / "engine" / "schema.json").read_text())
 ENGINE_INFO_SCHEMA = json.loads((ROOT / "engine" / "engine-info.schema.json").read_text())
 EPS = 1e-6
+
+
+def _load_mock_module():
+    spec = importlib.util.spec_from_file_location("mock_sidecar", MOCK)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
 
 
 def run_mock(*args):
@@ -95,3 +104,20 @@ def test_duplicate_capabilities_rejected():
     data["engineCapabilities"] = data["engineCapabilities"] + ["key"]
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(data, SCHEMA)
+
+
+def test_producer_refuses_to_emit_nan():
+    """Bare NaN/Infinity are invalid JSON for JS and slip past jsonschema range checks,
+    so the emitter must reject them (allow_nan=False) rather than print them."""
+    mock = _load_mock_module()
+    for bad in (float("nan"), float("inf"), float("-inf")):
+        with pytest.raises(ValueError):
+            mock._dumps({"confidence": bad})
+
+
+def test_jsonschema_alone_would_let_nan_pass_range():
+    """Documents WHY the producer guard above is necessary: jsonschema's [0,1] bounds
+    do not catch NaN, so allow_nan=False is the real defense."""
+    data = json.loads(run_mock("analyze", "--payload", "full").stdout)
+    data["key"]["confidence"] = math.nan
+    jsonschema.validate(data, SCHEMA)  # passes — the gap the producer guard closes

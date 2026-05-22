@@ -27,9 +27,19 @@ _SEG = 1.6
 DURATION = round(_SEG * len(_SEQ), 6)
 
 
+def _dumps(obj):
+    """Serialize to JSON, refusing NaN/Infinity (allow_nan=False).
+
+    Python's default json.dumps emits bare `NaN`/`Infinity` tokens — invalid JSON for
+    Bun/JS (JSON.parse throws) and slipped through jsonschema numeric range checks. A
+    producer must fail loudly instead. The real analyze.py must reuse this discipline.
+    """
+    return json.dumps(obj, allow_nan=False)
+
+
 def emit(obj):
     """Write one NDJSON event to stderr."""
-    sys.stderr.write(json.dumps(obj) + "\n")
+    sys.stderr.write(_dumps(obj) + "\n")
     sys.stderr.flush()
 
 
@@ -106,7 +116,7 @@ def analysis(payload):
 
 
 def out(obj):
-    sys.stdout.write(json.dumps(obj))
+    sys.stdout.write(_dumps(obj))
     sys.stdout.flush()
 
 
