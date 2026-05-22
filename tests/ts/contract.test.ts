@@ -1,5 +1,10 @@
 import { test, expect } from "bun:test";
-import { validateAnalysis, ContractError } from "../../src/core/validate";
+import {
+  validateAnalysis,
+  validateEngineInfo,
+  parseEngineOutput,
+  ContractError,
+} from "../../src/core/validate";
 
 const MOCK = "engine/mock_sidecar.py";
 
@@ -58,11 +63,27 @@ test("NDJSON progress emits the ordered stages on stderr", () => {
   expect(stages).toEqual(["decode", "features", "beat-track", "chord-decode", "key-detect", "assemble"]);
 });
 
-test("error scenario emits an error envelope and a nonzero exit code", () => {
+test("error scenario: parseEngineOutput discriminates to an error envelope, nonzero exit", () => {
   const { stdout, code } = runMock(["analyze", "--scenario", "error"]);
   expect(code).not.toBe(0);
-  const obj = JSON.parse(stdout);
-  expect(obj.error.kind).toBe("decode_failed");
+  const parsed = parseEngineOutput(JSON.parse(stdout));
+  expect(parsed.kind).toBe("error");
+  if (parsed.kind === "error") expect(parsed.value.kind).toBe("decode_failed");
+});
+
+test("success scenario: parseEngineOutput discriminates to an analysis", () => {
+  const { stdout } = runMock(["analyze", "--payload", "full"]);
+  const parsed = parseEngineOutput(JSON.parse(stdout));
+  expect(parsed.kind).toBe("analysis");
+  if (parsed.kind === "analysis") expect(parsed.value.engine.name).toBe("madmom");
+});
+
+test("engine-info round-trips through validateEngineInfo", () => {
+  const { stdout } = runMock(["engine-info", "--payload", "full"]);
+  const info = validateEngineInfo(JSON.parse(stdout));
+  expect(info.name).toBe("madmom");
+  expect(info.contractVersion).toMatch(/^1\./);
+  expect(info.capabilities).toContain("downbeats");
 });
 
 // --- validator rejection cases (the contract's teeth) ---
@@ -96,5 +117,17 @@ test('rejects an "N" segment that carries a root', () => {
 test("rejects an incompatible contractVersion major", () => {
   const obj = JSON.parse(runMock(["analyze", "--payload", "sparse"]).stdout);
   obj.contractVersion = "2.0.0";
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("strict: rejects an unknown top-level property (parity with schema)", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "sparse"]).stdout);
+  obj.tempoBpm = 120; // not in the contract
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("strict: rejects an unknown property inside a chord segment", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "sparse"]).stdout);
+  obj.chords[0].inversion = "1st";
   expect(() => validateAnalysis(obj)).toThrow(ContractError);
 });

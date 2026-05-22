@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/slittycode/chordTUI/engine/engine-info.schema.json",
+  "title": "EngineInfoResponse",
+  "description": "Response of the cheap `engine-info` command. Mirrors EngineInfoResponse in src/core/types.ts.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["name", "version", "license", "modelVersions", "confidenceKind", "contractVersion", "capabilities"],
+  "properties": {
+    "name": { "enum": ["librosa", "madmom", "essentia"] },
+    "version": { "type": "string" },
+    "license": { "type": "string" },
+    "modelVersions": { "type": "object", "additionalProperties": { "type": "string" } },
+    "confidenceKind": { "enum": ["posterior", "correlation", "heuristic"] },
+    "contractVersion": { "type": "string", "pattern": "^1\\." },
+    "capabilities": {
+      "type": "array",
+      "items": {
+        "enum": ["key", "keyCandidates", "chords", "beats", "downbeats", "timeSignature", "extendedChords"]
+      },
+      "uniqueItems": true
+    }
+  }
+}

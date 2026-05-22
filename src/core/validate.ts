@@ -1,26 +1,36 @@
 // src/core/validate.ts — runtime validation of engine output.
 //
 // TS types erase at runtime, so engine.ts must validate parsed JSON before trusting
-// it. We hand-roll the check (the contract is small and stable) rather than pull in a
-// JSON-schema dependency. Python validates the same payloads against engine/schema.json;
-// the round-trip tests assert both sides agree, including the gap-free invariant that
-// JSON Schema cannot express.
+// it. We hand-roll the checks (the contract is small and stable) rather than pull in a
+// JSON-schema dependency. Python validates the same payloads against engine/schema.json
+// + engine/engine-info.schema.json; the round-trip tests assert both sides agree —
+// including unknown-key rejection (strict, matching `additionalProperties: false`) and
+// the gap-free chord invariant that JSON Schema cannot express.
 
 import type {
   Analysis,
   ConfidenceKind,
+  ContractVersion,
   EngineCapability,
+  EngineError,
   EngineInfo,
+  EngineInfoResponse,
   EngineName,
   KeyCandidate,
   KeyResult,
 } from "./types";
 
-const CONTRACT_MAJOR = 1;
+const CONTRACT_MAJOR_RE = /^1\.\d+\.\d+$/;
 const EPS = 1e-6;
 
 const CONFIDENCE_KINDS: ConfidenceKind[] = ["posterior", "correlation", "heuristic"];
 const ENGINE_NAMES: EngineName[] = ["librosa", "madmom", "essentia"];
+const ERROR_KINDS: EngineError["kind"][] = [
+  "bad_input",
+  "decode_failed",
+  "engine_unavailable",
+  "internal",
+];
 const CAPABILITIES: EngineCapability[] = [
   "key",
   "keyCandidates",
@@ -45,6 +55,13 @@ function fail(msg: string): never {
 
 function isObj(x: unknown): x is Record<string, unknown> {
   return typeof x === "object" && x !== null && !Array.isArray(x);
+}
+
+/** Strict: reject any property not in `allowed` (mirrors schema additionalProperties:false). */
+function noExtra(o: Record<string, unknown>, allowed: string[], where: string): void {
+  for (const k of Object.keys(o)) {
+    if (!allowed.includes(k)) fail(`${where}: unexpected property "${k}"`);
+  }
 }
 
 function reqNum(o: Record<string, unknown>, k: string, where: string): number {
@@ -76,6 +93,7 @@ function numArrayOrNull(o: Record<string, unknown>, k: string): number[] | null 
 
 function validateKey(v: unknown, where: string): KeyResult {
   if (!isObj(v)) fail(`${where}: must be an object`);
+  noExtra(v, ["tonic", "mode", "confidence"], where);
   const tonic = reqStr(v, "tonic", where);
   const mode = reqStr(v, "mode", where);
   if (mode !== "major" && mode !== "minor") fail(`${where}.mode must be "major" | "minor"`);
@@ -83,25 +101,48 @@ function validateKey(v: unknown, where: string): KeyResult {
   return { tonic, mode, confidence };
 }
 
-function validateEngine(v: unknown): EngineInfo {
-  if (!isObj(v)) fail(`"engine" must be an object`);
-  const name = reqStr(v, "name", "engine") as EngineName;
-  if (!ENGINE_NAMES.includes(name)) fail(`engine.name invalid: ${name}`);
-  const confidenceKind = reqStr(v, "confidenceKind", "engine") as ConfidenceKind;
+/** The 5 EngineInfo fields, without unknown-key checks (callers add the right noExtra set). */
+function engineFields(v: Record<string, unknown>, where: string): EngineInfo {
+  const name = reqStr(v, "name", where) as EngineName;
+  if (!ENGINE_NAMES.includes(name)) fail(`${where}.name invalid: ${name}`);
+  const confidenceKind = reqStr(v, "confidenceKind", where) as ConfidenceKind;
   if (!CONFIDENCE_KINDS.includes(confidenceKind)) {
-    fail(`engine.confidenceKind invalid: ${confidenceKind}`);
+    fail(`${where}.confidenceKind invalid: ${confidenceKind}`);
   }
   const mv = v["modelVersions"];
   if (!isObj(mv) || Object.values(mv).some((x) => typeof x !== "string")) {
-    fail(`engine.modelVersions must be Record<string, string>`);
+    fail(`${where}.modelVersions must be Record<string, string>`);
   }
   return {
     name,
-    version: reqStr(v, "version", "engine"),
-    license: reqStr(v, "license", "engine"),
+    version: reqStr(v, "version", where),
+    license: reqStr(v, "license", where),
     modelVersions: mv as Record<string, string>,
     confidenceKind,
   };
+}
+
+function validateEngine(v: unknown): EngineInfo {
+  if (!isObj(v)) fail(`"engine" must be an object`);
+  noExtra(v, ["name", "version", "license", "modelVersions", "confidenceKind"], "engine");
+  return engineFields(v, "engine");
+}
+
+function validateCapabilities(v: unknown, where: string): EngineCapability[] {
+  if (
+    !Array.isArray(v) ||
+    v.some((c) => typeof c !== "string" || !CAPABILITIES.includes(c as EngineCapability))
+  ) {
+    fail(`${where} must be an array of known capability strings`);
+  }
+  return v as EngineCapability[];
+}
+
+function validateContractVersion(v: string, where: string): ContractVersion {
+  if (!CONTRACT_MAJOR_RE.test(v)) {
+    fail(`${where}: unsupported contractVersion "${v}" (this build needs major 1, form 1.x.y)`);
+  }
+  return v as ContractVersion;
 }
 
 function validateChords(v: unknown, durationSec: number): Analysis["chords"] {
@@ -116,6 +157,7 @@ function validateChords(v: unknown, durationSec: number): Analysis["chords"] {
     const where = `chords[${i}]`;
     const s = v[i];
     if (!isObj(s)) fail(`${where}: must be an object`);
+    noExtra(s, ["start", "end", "label", "root", "quality", "confidence"], where);
     const start = reqNum(s, "start", where);
     const end = reqNum(s, "end", where);
     const label = reqStr(s, "label", where);
@@ -159,24 +201,30 @@ function validateChords(v: unknown, durationSec: number): Analysis["chords"] {
 /** Validate arbitrary parsed JSON as an Analysis, or throw ContractError. */
 export function validateAnalysis(input: unknown): Analysis {
   if (!isObj(input)) fail("Analysis must be an object");
+  noExtra(
+    input,
+    [
+      "contractVersion",
+      "file",
+      "durationSec",
+      "engine",
+      "engineCapabilities",
+      "vocabulary",
+      "key",
+      "keyCandidates",
+      "chords",
+      "beats",
+      "downbeats",
+      "timeSignature",
+    ],
+    "Analysis",
+  );
 
-  const contractVersion = reqStr(input, "contractVersion", "root");
-  const major = Number.parseInt(contractVersion.split(".")[0] ?? "", 10);
-  if (major !== CONTRACT_MAJOR) {
-    fail(`unsupported contractVersion "${contractVersion}" (this build needs major ${CONTRACT_MAJOR})`);
-  }
-
+  const contractVersion = validateContractVersion(reqStr(input, "contractVersion", "root"), "root");
   const file = reqStr(input, "file", "root");
   const durationSec = reqNum(input, "durationSec", "root");
   const engine = validateEngine(input["engine"]);
-
-  const caps = input["engineCapabilities"];
-  if (
-    !Array.isArray(caps) ||
-    caps.some((c) => typeof c !== "string" || !CAPABILITIES.includes(c as EngineCapability))
-  ) {
-    fail(`"engineCapabilities" must be an array of known capability strings`);
-  }
+  const engineCapabilities = validateCapabilities(input["engineCapabilities"], "engineCapabilities");
 
   const vocabulary = reqStr(input, "vocabulary", "root");
   if (vocabulary !== "triads") fail(`"vocabulary" must be "triads" at MVP, got "${vocabulary}"`);
@@ -204,11 +252,11 @@ export function validateAnalysis(input: unknown): Analysis {
   else timeSignature = ts;
 
   return {
-    contractVersion: contractVersion as ContractVersion,
+    contractVersion,
     file,
     durationSec,
     engine,
-    engineCapabilities: caps as EngineCapability[],
+    engineCapabilities,
     vocabulary: "triads",
     key,
     keyCandidates,
@@ -219,5 +267,44 @@ export function validateAnalysis(input: unknown): Analysis {
   };
 }
 
-// Local alias to keep the public return type readable without re-importing.
-type ContractVersion = Analysis["contractVersion"];
+/** Validate the `engine-info` response (cheap capability/version probe). */
+export function validateEngineInfo(input: unknown): EngineInfoResponse {
+  if (!isObj(input)) fail("engine-info must be an object");
+  noExtra(
+    input,
+    ["name", "version", "license", "modelVersions", "confidenceKind", "contractVersion", "capabilities"],
+    "engine-info",
+  );
+  const base = engineFields(input, "engine-info");
+  const contractVersion = validateContractVersion(
+    reqStr(input, "contractVersion", "engine-info"),
+    "engine-info",
+  );
+  const capabilities = validateCapabilities(input["capabilities"], "engine-info.capabilities");
+  return { ...base, contractVersion, capabilities };
+}
+
+/** Validate an EngineError envelope (the `.error` value, not the wrapper). */
+export function validateEngineError(input: unknown): EngineError {
+  if (!isObj(input)) fail("error must be an object");
+  noExtra(input, ["kind", "detail", "hint"], "error");
+  const kind = reqStr(input, "kind", "error") as EngineError["kind"];
+  if (!ERROR_KINDS.includes(kind)) fail(`error.kind invalid: ${kind}`);
+  const detail = reqStr(input, "detail", "error");
+  const hint = input["hint"];
+  if (hint !== undefined && typeof hint !== "string") fail(`error.hint must be string | undefined`);
+  return hint === undefined ? { kind, detail } : { kind, detail, hint };
+}
+
+/**
+ * Discriminate the stdout union: an Analysis, or an `{ error: EngineError }` envelope.
+ * This is the single seam engine.ts uses so the discriminator is never reinvented.
+ */
+export function parseEngineOutput(
+  input: unknown,
+): { kind: "analysis"; value: Analysis } | { kind: "error"; value: EngineError } {
+  if (isObj(input) && "error" in input) {
+    return { kind: "error", value: validateEngineError(input["error"]) };
+  }
+  return { kind: "analysis", value: validateAnalysis(input) };
+}

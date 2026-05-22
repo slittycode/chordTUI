@@ -6,10 +6,12 @@ import subprocess
 import sys
 
 import jsonschema
+import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 MOCK = ROOT / "engine" / "mock_sidecar.py"
 SCHEMA = json.loads((ROOT / "engine" / "schema.json").read_text())
+ENGINE_INFO_SCHEMA = json.loads((ROOT / "engine" / "engine-info.schema.json").read_text())
 EPS = 1e-6
 
 
@@ -57,3 +59,18 @@ def test_error_scenario_is_nonzero_with_envelope():
     p = run_mock("analyze", "--scenario", "error")
     assert p.returncode != 0
     assert json.loads(p.stdout)["error"]["kind"] == "decode_failed"
+
+
+def test_engine_info_validates_against_schema():
+    for payload in ("sparse", "full"):
+        p = run_mock("engine-info", "--payload", payload)
+        assert p.returncode == 0, p.stderr
+        jsonschema.validate(json.loads(p.stdout), ENGINE_INFO_SCHEMA)
+
+
+def test_unknown_top_level_field_is_rejected():
+    """Strict parity with validate.ts: additionalProperties:false rejects unknown keys."""
+    data = json.loads(run_mock("analyze", "--payload", "sparse").stdout)
+    data["tempoBpm"] = 120
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, SCHEMA)

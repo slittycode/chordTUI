@@ -10,7 +10,8 @@
 //   3. Enharmonic spelling and roman numerals are derived TS-side (music.ts) from
 //      (key, root, quality); they are never sent over the wire.
 
-export type ContractVersion = "1.0.0"; // frontend rejects a mismatched MAJOR
+export type ContractVersion = `1.${number}.${number}`; // major-1 family; frontend rejects a mismatched MAJOR
+export const CURRENT_CONTRACT_VERSION: ContractVersion = "1.0.0";
 
 export type EngineCapability =
   | "key"
@@ -31,6 +32,16 @@ export interface EngineInfo {
   license: string; // "ISC" | "CC-BY-NC-SA-4.0" | "AGPL-3.0"
   modelVersions: Record<string, string>; // {} when rule-based (librosa)
   confidenceKind: ConfidenceKind; // posterior=madmom, correlation=librosa key, heuristic=essentia
+}
+
+/**
+ * Response of the cheap `engine-info` command (decodes no audio). The frontend calls
+ * this to build cache keys and discover capabilities without running a full analysis.
+ * It is part of the locked IPC contract — see engine/engine-info.schema.json.
+ */
+export interface EngineInfoResponse extends EngineInfo {
+  contractVersion: ContractVersion;
+  capabilities: EngineCapability[];
 }
 
 export interface KeyResult {
@@ -77,6 +88,25 @@ export interface EngineError {
   detail: string;
   hint?: string;
 }
+
+/**
+ * Process exit codes. stdout still carries JSON (an Analysis or an EngineError) for 0/2/4;
+ * for `engine_unavailable` (3) there may be NO stdout — the caller routes to `doctor`.
+ */
+export const EXIT = {
+  ok: 0,
+  badInput: 2,
+  engineUnavailable: 3,
+  analysisFailed: 4,
+} as const;
+
+/** Canonical EngineError.kind -> process exit code. The engine and engine.ts share this. */
+export const ERROR_KIND_EXIT: Record<EngineError["kind"], number> = {
+  bad_input: EXIT.badInput,
+  engine_unavailable: EXIT.engineUnavailable,
+  decode_failed: EXIT.analysisFailed,
+  internal: EXIT.analysisFailed,
+};
 
 /** NDJSON line types streamed on the engine's stderr. */
 export type EngineEvent =
