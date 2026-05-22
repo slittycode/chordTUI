@@ -16,8 +16,8 @@
 // useAnalysis.ts sits on top of ("one AbortController per run").
 
 import { EXIT, ENGINE_STAGES } from "./types";
-import type { Analysis, EngineError, EngineEvent, EngineStage } from "./types";
-import { ContractError, parseEngineOutput } from "./validate";
+import type { Analysis, EngineError, EngineEvent, EngineInfoResponse, EngineStage } from "./types";
+import { ContractError, parseEngineOutput, validateEngineInfo } from "./validate";
 
 const DEFAULT_TIMEOUT_MS = 120_000; // generous: madmom can take 20–60s on a full song
 const DEFAULT_GRACE_MS = 3_000; // SIGTERM → SIGKILL window (matches tempo's daemon)
@@ -182,17 +182,21 @@ function clip(s: string, n = 200): string {
 }
 
 /**
- * Spawn the sidecar, stream progress, and return the validated `Analysis` or structured
- * engine `{ error }`. Throws an `EngineRunError` subclass for process-level failures and
- * `ContractError` for malformed/unparseable output.
+ * Spawn the sidecar with the full cancel discipline (wall-clock timeout + AbortSignal →
+ * SIGTERM → grace → SIGKILL), drain stderr as NDJSON progress, buffer stdout, and return
+ * the trimmed stdout `text` + numeric exit `code` for a caller-supplied validator. All
+ * process-level failures (timeout, cancel, engine-unavailable, no/over-cap output, foreign
+ * signal) throw here, so `runEngine` / `runEngineInfo` differ ONLY in how they validate the
+ * JSON. On a normal return, `code` is a non-null number that is NOT `EXIT.engineUnavailable`
+ * and `text` is non-empty.
  */
-export async function runEngine(opts: RunEngineOptions): Promise<RunEngineResult> {
+async function spawnAndCollect(opts: RunEngineOptions): Promise<{ text: string; code: number }> {
   const { command, cwd, env, signal, onEvent } = opts;
   const timeoutMs = opts.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const graceMs = opts.graceMs ?? DEFAULT_GRACE_MS;
   const maxStdoutBytes = opts.maxStdoutBytes ?? DEFAULT_MAX_STDOUT_BYTES;
 
-  if (command.length === 0) throw new EngineSpawnError("runEngine: empty command");
+  if (command.length === 0) throw new EngineSpawnError("engine command is empty");
 
   // One controller fuses caller-cancel and timeout; whichever fires first records why.
   // A holder object (rather than a bare `let`) keeps the union type at the comparisons
@@ -296,6 +300,16 @@ export async function runEngine(opts: RunEngineOptions): Promise<RunEngineResult
     throw new EngineSpawnError(`engine produced no stdout (exit ${code})`);
   }
 
+  return { text, code };
+}
+
+/**
+ * Spawn the sidecar, stream progress, and return the validated `Analysis` or structured
+ * engine `{ error }`. Throws an `EngineRunError` subclass for process-level failures and
+ * `ContractError` for malformed/unparseable output.
+ */
+export async function runEngine(opts: RunEngineOptions): Promise<RunEngineResult> {
+  const { text, code } = await spawnAndCollect(opts);
   // For exits 0/2/4 the stdout JSON is authoritative: an Analysis, or an `{ error }` envelope.
   let json: unknown;
   try {
@@ -304,4 +318,21 @@ export async function runEngine(opts: RunEngineOptions): Promise<RunEngineResult
     throw new ContractError(`engine stdout was not valid JSON (exit ${code}): ${clip(text)}`);
   }
   return parseEngineOutput(json); // throws ContractError on a malformed payload
+}
+
+/**
+ * Spawn the cheap `engine-info` command and return the validated `EngineInfoResponse`. Uses
+ * the same spawnAndCollect discipline as runEngine — so a broken Python env that hangs on
+ * `import` still hits the timeout — but validates the engine-info shape, which is NOT an
+ * Analysis (so runEngine's parseEngineOutput can't be reused here).
+ */
+export async function runEngineInfo(opts: RunEngineOptions): Promise<EngineInfoResponse> {
+  const { text, code } = await spawnAndCollect(opts);
+  let json: unknown;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    throw new ContractError(`engine-info stdout was not valid JSON (exit ${code}): ${clip(text)}`);
+  }
+  return validateEngineInfo(json);
 }
