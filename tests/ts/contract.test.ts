@@ -131,3 +131,48 @@ test("strict: rejects an unknown property inside a chord segment", () => {
   obj.chords[0].inversion = "1st";
   expect(() => validateAnalysis(obj)).toThrow(ContractError);
 });
+
+// --- numeric range / finiteness (confidence is documented as 0..1) ---
+
+test("rejects key confidence outside [0,1]", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "full"]).stdout);
+  obj.key.confidence = 2;
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("rejects chord-segment confidence outside [0,1]", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "full"]).stdout);
+  obj.chords[0].confidence = -0.5;
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("rejects negative durationSec", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "sparse"]).stdout);
+  obj.durationSec = -1;
+  obj.chords = [];
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("rejects non-finite numeric fields", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "sparse"]).stdout);
+  obj.durationSec = Infinity; // in-memory; JSON itself can't carry Infinity
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("rejects duplicate engineCapabilities (parity with schema uniqueItems)", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "full"]).stdout);
+  obj.engineCapabilities = [...obj.engineCapabilities, "key"];
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("rejects a malformed contractVersion (1.0 without patch)", () => {
+  const obj = JSON.parse(runMock(["analyze", "--payload", "sparse"]).stdout);
+  obj.contractVersion = "1.0";
+  expect(() => validateAnalysis(obj)).toThrow(ContractError);
+});
+
+test("strict: parseEngineOutput rejects an error wrapper with extra keys", () => {
+  expect(() =>
+    parseEngineOutput({ error: { kind: "internal", detail: "x" }, extra: true }),
+  ).toThrow(ContractError);
+});

@@ -12,7 +12,7 @@
     "license": { "type": "string" },
     "modelVersions": { "type": "object", "additionalProperties": { "type": "string" } },
     "confidenceKind": { "enum": ["posterior", "correlation", "heuristic"] },
-    "contractVersion": { "type": "string", "pattern": "^1\\." },
+    "contractVersion": { "type": "string", "pattern": "^1\\.\\d+\\.\\d+$" },
     "capabilities": {
       "type": "array",
       "items": {

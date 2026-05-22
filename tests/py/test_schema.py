@@ -74,3 +74,24 @@ def test_unknown_top_level_field_is_rejected():
     data["tempoBpm"] = 120
     with pytest.raises(jsonschema.ValidationError):
         jsonschema.validate(data, SCHEMA)
+
+
+def test_confidence_out_of_range_rejected():
+    data = json.loads(run_mock("analyze", "--payload", "full").stdout)
+    data["key"]["confidence"] = 2  # documented range is [0, 1]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, SCHEMA)
+
+
+def test_malformed_contract_version_rejected():
+    data = json.loads(run_mock("analyze", "--payload", "sparse").stdout)
+    data["contractVersion"] = "1.0"  # missing patch — tightened pattern rejects it
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, SCHEMA)
+
+
+def test_duplicate_capabilities_rejected():
+    data = json.loads(run_mock("analyze", "--payload", "full").stdout)
+    data["engineCapabilities"] = data["engineCapabilities"] + ["key"]
+    with pytest.raises(jsonschema.ValidationError):
+        jsonschema.validate(data, SCHEMA)

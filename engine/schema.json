@@ -20,7 +20,7 @@
     "timeSignature"
   ],
   "properties": {
-    "contractVersion": { "type": "string", "pattern": "^1\\." },
+    "contractVersion": { "type": "string", "pattern": "^1\\.\\d+\\.\\d+$" },
     "file": { "type": "string" },
     "durationSec": { "type": "number", "minimum": 0 },
     "engine": {
@@ -70,7 +70,7 @@
           "label": { "type": "string" },
           "root": { "type": ["string", "null"] },
           "quality": { "type": "string" },
-          "confidence": { "type": ["number", "null"] }
+          "confidence": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
         }
       }
     },
@@ -86,7 +86,7 @@
       "properties": {
         "tonic": { "type": "string" },
         "mode": { "enum": ["major", "minor"] },
-        "confidence": { "type": "number" }
+        "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
       }
     }
   }

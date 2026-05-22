@@ -36,7 +36,17 @@ Real-recording accuracy is measured later by the §9 accuracy gate on the fixtur
 
 ## 2. librosa floor (preview + fallback) — ☐ pending
 
-## 3. Contract round-trip (types.ts ⇄ schema.json ⇄ mock sidecar) — ☐ pending
+## 3. Contract round-trip (types.ts ⇄ schema.json ⇄ mock sidecar) — ✅ PASS (2026-05-23)
+
+The locked contract round-trips both ways against the committed mock sidecar:
+- **TS:** `src/core/validate.ts` validates mock output against `src/core/types.ts`
+  (strict unknown-key rejection, `null`≠missing, gap-free chord contiguity, confidence
+  ∈[0,1], `parseEngineOutput` Analysis|EngineError discriminator). `bun test`: **21 pass**.
+- **Python:** mock output validates against `engine/schema.json` +
+  `engine/engine-info.schema.json` (incl. unknown-key, range, contractVersion-pattern,
+  uniqueItems). `pytest`: **10 pass**. `tsc --noEmit`: clean.
+- Note: `engine.ts` (the runtime *consumer* that wraps `validate.ts`) is built in
+  Milestone B/Phase 2 — Phase 0 proves the contract + validator, not the spawn wrapper.
 
 ## 4. `bun build --compile` with OpenTUI native deps on macOS-arm64 — ☐ pending
 The other unverified assumption: whether a single compiled binary embeds and runs

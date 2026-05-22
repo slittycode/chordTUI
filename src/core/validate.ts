@@ -66,9 +66,15 @@ function noExtra(o: Record<string, unknown>, allowed: string[], where: string): 
 
 function reqNum(o: Record<string, unknown>, k: string, where: string): number {
   const v = o[k];
-  if (typeof v !== "number" || Number.isNaN(v)) {
-    fail(`${where}: expected number at "${k}", got ${JSON.stringify(v)}`);
+  if (typeof v !== "number" || !Number.isFinite(v)) {
+    fail(`${where}: expected finite number at "${k}", got ${JSON.stringify(v)}`);
   }
+  return v;
+}
+
+/** Confidence must be a probability/score in [0, 1]. */
+function unitInterval(v: number, where: string): number {
+  if (v < 0 || v > 1) fail(`${where}: confidence ${v} out of range [0, 1]`);
   return v;
 }
 
@@ -97,7 +103,7 @@ function validateKey(v: unknown, where: string): KeyResult {
   const tonic = reqStr(v, "tonic", where);
   const mode = reqStr(v, "mode", where);
   if (mode !== "major" && mode !== "minor") fail(`${where}.mode must be "major" | "minor"`);
-  const confidence = reqNum(v, "confidence", where);
+  const confidence = unitInterval(reqNum(v, "confidence", where), where);
   return { tonic, mode, confidence };
 }
 
@@ -135,6 +141,9 @@ function validateCapabilities(v: unknown, where: string): EngineCapability[] {
   ) {
     fail(`${where} must be an array of known capability strings`);
   }
+  if (new Set(v as string[]).size !== (v as string[]).length) {
+    fail(`${where} contains duplicate capabilities`);
+  }
   return v as EngineCapability[];
 }
 
@@ -167,8 +176,13 @@ function validateChords(v: unknown, durationSec: number): Analysis["chords"] {
     if (root !== null && typeof root !== "string") fail(`${where}.root must be string | null`);
 
     const confidence = s["confidence"];
-    if (confidence !== null && (typeof confidence !== "number" || Number.isNaN(confidence))) {
-      fail(`${where}.confidence must be number | null`);
+    if (confidence !== null) {
+      if (typeof confidence !== "number" || !Number.isFinite(confidence)) {
+        fail(`${where}.confidence must be a finite number | null`);
+      }
+      if (confidence < 0 || confidence > 1) {
+        fail(`${where}.confidence ${confidence} out of range [0, 1]`);
+      }
     }
 
     if (end <= start) fail(`${where}: end (${end}) must be > start (${start})`);
@@ -223,6 +237,7 @@ export function validateAnalysis(input: unknown): Analysis {
   const contractVersion = validateContractVersion(reqStr(input, "contractVersion", "root"), "root");
   const file = reqStr(input, "file", "root");
   const durationSec = reqNum(input, "durationSec", "root");
+  if (durationSec < 0) fail(`"durationSec" must be >= 0, got ${durationSec}`);
   const engine = validateEngine(input["engine"]);
   const engineCapabilities = validateCapabilities(input["engineCapabilities"], "engineCapabilities");
 
@@ -304,6 +319,7 @@ export function parseEngineOutput(
   input: unknown,
 ): { kind: "analysis"; value: Analysis } | { kind: "error"; value: EngineError } {
   if (isObj(input) && "error" in input) {
+    noExtra(input, ["error"], "engine output"); // strict: exactly { error: ... }, nothing else
     return { kind: "error", value: validateEngineError(input["error"]) };
   }
   return { kind: "analysis", value: validateAnalysis(input) };

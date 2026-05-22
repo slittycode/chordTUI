@@ -244,9 +244,16 @@ macOS-arm64 (the `bun run` source path stays cross-platform).
 
 ## 6. Install & launch story
 
-1. **`chord setup`** — extracts the embedded engine sources (compiled-binary distro),
-   creates the uv venv, installs the **clean core** (librosa) by default; prints how
-   to opt into madmom (NC) / essentia (AGPL).
+1. **`chord setup`** — extracts the embedded engine sources (compiled-binary distro)
+   and creates the uv venv. It always installs the **clean core** (librosa). Then,
+   because the project targets ~80% out-of-box, it **prompts to install the madmom
+   accuracy engine** — showing the one-time CC-BY-NC-SA **NonCommercial** notice and
+   **defaulting to yes** (explicit consent, never a silent NC install). So a normal
+   `chord setup` yields the high-accuracy engine; **declining** leaves a working
+   librosa-only install with a clear "accuracy will be lower — re-run `chord setup
+   --engine madmom` to upgrade" message. essentia (AGPL) is a separate explicit opt-in.
+   Non-interactive flags: `--engine librosa|madmom|essentia`, `--no-madmom`,
+   `--accept-noncommercial`.
 2. **Engine dir resolution** (`engineResolve.ts`): `$CHORDTUI_ENGINE_DIR` →
    `~/.local/share/chordtui/engine` → sibling `engine/` (dev).
 3. **Python path resolved ONCE** — reuse `.venv/bin/python`; **no per-call `uv run`**.
@@ -281,7 +288,8 @@ viability gates the headline goal. **Gate:** ① **madmom installs and runs on t
 machine** — ✅ **PASSED 2026-05-22** (Py3.9.6 + numpy 1.23.5; correctly read a synth
 I–IV–V–I as C/F/G/C in C major; recipe in `engine/probe-matrix.md`/`docs/probe-matrix.md`);
 ② contract round-trips (mock
-output validates against `types.ts`+`schema.json` and parses in `engine.ts`); ③ librosa
+output validates against `types.ts` via `validate.ts` AND against `schema.json`/`engine-info.schema.json`
+on the Python side — the validator `engine.ts` will wrap; engine.ts itself lands in Phase 2); ③ librosa
 preview/fallback runs end-to-end; ④ license + repo decided.
 
 **Phase 1 — Engine (librosa-first) ∥ Phase 2 — Frontend (mock-first)** — run in
@@ -326,8 +334,9 @@ mini-map, multi-platform builds (beyond macOS-arm64).
 
 ## 9. Verification
 
-- **Phase 0:** mock output validates against `types.ts`+`schema.json` and parses in
-  `engine.ts`; the three gate conditions checked in `docs/probe-matrix.md`.
+- **Phase 0:** mock output validates against `types.ts` (via `validate.ts`) AND
+  `schema.json`/`engine-info.schema.json` (Python) — the validator `engine.ts` will wrap
+  (engine.ts is built in Phase 2); the gate conditions tracked in `docs/probe-matrix.md`.
 - **Phase 1:** `uv run python analyze.py --engine librosa --file <fixture.wav> --json`
   → valid contract JSON; bad path prints error JSON with exit 2/3/4; stderr emits NDJSON
   stages; `ruff` + `pytest` green.
