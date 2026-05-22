@@ -1,0 +1,21 @@
+# Bun / Node
+node_modules/
+dist/
+*.tsbuildinfo
+.DS_Store
+
+# Python engine (uv-managed)
+engine/.venv/
+__pycache__/
+*.pyc
+.uv-cache/
+
+# Env / local
+.env
+.env.local
+
+# Audio test fixtures (large; keep out of git unless intentionally added)
+*.mp3
+*.flac
+*.wav
+!tests/fixtures/*.wav
