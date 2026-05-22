@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/slittycode/chordTUI/engine/schema.json",
+  "title": "Analysis",
+  "description": "chordTUI engine output contract. Mirrors src/core/types.ts. NOTE: JSON Schema cannot express the gap-free/contiguity invariant on `chords` — that is enforced by validate.ts and the round-trip tests.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "contractVersion",
+    "file",
+    "durationSec",
+    "engine",
+    "engineCapabilities",
+    "vocabulary",
+    "key",
+    "keyCandidates",
+    "chords",
+    "beats",
+    "downbeats",
+    "timeSignature"
+  ],
+  "properties": {
+    "contractVersion": { "type": "string", "pattern": "^1\\." },
+    "file": { "type": "string" },
+    "durationSec": { "type": "number", "minimum": 0 },
+    "engine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "license", "modelVersions", "confidenceKind"],
+      "properties": {
+        "name": { "enum": ["librosa", "madmom", "essentia"] },
+        "version": { "type": "string" },
+        "license": { "type": "string" },
+        "modelVersions": {
+          "type": "object",
+          "additionalProperties": { "type": "string" }
+        },
+        "confidenceKind": { "enum": ["posterior", "correlation", "heuristic"] }
+      }
+    },
+    "engineCapabilities": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "key",
+          "keyCandidates",
+          "chords",
+          "beats",
+          "downbeats",
+          "timeSignature",
+          "extendedChords"
+        ]
+      },
+      "uniqueItems": true
+    },
+    "vocabulary": { "const": "triads" },
+    "key": { "$ref": "#/$defs/keyResult" },
+    "keyCandidates": {
+      "oneOf": [{ "type": "null" }, { "type": "array", "items": { "$ref": "#/$defs/keyResult" } }]
+    },
+    "chords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["start", "end", "label", "root", "quality", "confidence"],
+        "properties": {
+          "start": { "type": "number", "minimum": 0 },
+          "end": { "type": "number", "minimum": 0 },
+          "label": { "type": "string" },
+          "root": { "type": ["string", "null"] },
+          "quality": { "type": "string" },
+          "confidence": { "type": ["number", "null"] }
+        }
+      }
+    },
+    "beats": { "type": ["array", "null"], "items": { "type": "number" } },
+    "downbeats": { "type": ["array", "null"], "items": { "type": "number" } },
+    "timeSignature": { "type": ["string", "null"] }
+  },
+  "$defs": {
+    "keyResult": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["tonic", "mode", "confidence"],
+      "properties": {
+        "tonic": { "type": "string" },
+        "mode": { "enum": ["major", "minor"] },
+        "confidence": { "type": "number" }
+      }
+    }
+  }
+}

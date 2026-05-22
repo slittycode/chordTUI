@@ -1,0 +1,31 @@
+[project]
+name = "chordtui-engine"
+version = "0.0.0"
+description = "chordTUI audio-analysis sidecar (key / chords / progression)"
+requires-python = ">=3.9,<3.10"
+# Clean core only — ISC/BSD/MIT family. Pinned to madmom-compatible ceilings so the
+# opt-in madmom tier can layer into the same venv without a numpy/scipy downgrade.
+dependencies = [
+    "numpy<1.24",
+    "scipy<1.13",
+    "librosa>=0.10,<0.11",
+    "soundfile",
+]
+
+# Opt-in accuracy engines are installed by `chord setup --engine X`, NOT via uv extras,
+# so they never enter this lock (keeping the default install license-clean):
+#   madmom   : uv pip install --no-build-isolation "madmom==0.16.1" "cython<3"
+#              (code BSD; pretrained models are CC-BY-NC-SA 4.0 — NonCommercial). See docs/probe-matrix.md.
+#   essentia : uv pip install "essentia"   (AGPL-3.0)
+
+[dependency-groups]
+dev = ["pytest", "ruff", "jsonschema"]
+
+[tool.uv]
+package = false
+
+[tool.ruff]
+line-length = 100
+
+[tool.pytest.ini_options]
+testpaths = ["../tests/py"]

@@ -1,10 +1,15 @@
 # chordTUI — Key, Chord & Progression Recognition TUI
 
-> **Revised after a 9-agent (3×3) Opus review.** The headline change: the default
-> engine flips from madmom to **librosa**, driven by two verified facts the first
-> draft got wrong — madmom's pretrained models are **CC-BY-NC-SA (NonCommercial)**,
-> not MIT, and madmom 0.16.1 (Nov 2018, sdist-only, ≤Py3.7) has a **<70% clean-install
-> rate even fully pinned**. See "Changes from the previous draft" and "Open decisions".
+> **Revised after a 9-agent (3×3) Opus review, then validated by a Phase-0 probe.**
+> There are **two defaults, not one** (this resolves an earlier contradiction in this
+> doc): the **install default is librosa** (ISC, always installs, zero NC/AGPL) — it is
+> also the instant preview + the fallback; the **accuracy default is madmom** (opt-in
+> *install*, then auto-used for the final result once present), chosen because the user
+> requires ~80% out-of-box. This rests on two facts the first draft got wrong —
+> madmom's pretrained models are **CC-BY-NC-SA (NonCommercial)**, not MIT, and madmom
+> 0.16.1 (Nov 2018, sdist-only, ≤Py3.7) is install-fragile — but the **Phase-0 probe
+> PASSED on this machine**, so madmom-as-accuracy-default is viable. See "Changes from
+> the previous draft" and "Decisions".
 
 ## Decisions (resolved with the user)
 
@@ -71,8 +76,9 @@ and essentia (AGPL) engines usable at all.
 ## Changes from the previous draft (strikes)
 
 1. **Strike "madmom … MIT"** → BSD code, **CC-BY-NC-SA (NonCommercial) models**, required.
-2. **Strike "madmom default / essentia fallback"** → **librosa default**; madmom &
-   essentia are opt-in tiers. "Primary by accuracy" ≠ "default-shipped by reliability."
+2. **Strike "single default engine"** → **two defaults**: librosa = install default +
+   instant preview + fallback; madmom = accuracy default for the final result (opt-in
+   install, NC notice, auto-used once present). essentia = opt-in AGPL alternative, never auto.
 3. **Strike "mirror tempo's `executor.ts`"** → it uses `sh -c` (injection on user
    file paths), buffers + truncates at 4096 bytes, no timeout/cancel. Use **array-form
    `Bun.spawn`** + AbortSignal + timeout (mirror `tempo/src/daemon.ts` instead).
