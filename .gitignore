@@ -13,6 +13,7 @@ __pycache__/
 # Env / local
 .env
 .env.local
+.claude/
 
 # Audio test fixtures (large; keep out of git unless intentionally added)
 *.mp3
