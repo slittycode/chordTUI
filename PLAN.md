@@ -1,10 +1,15 @@
 # chordTUI — Key, Chord & Progression Recognition TUI
 
-> **Revised after a 9-agent (3×3) Opus review.** The headline change: the default
-> engine flips from madmom to **librosa**, driven by two verified facts the first
-> draft got wrong — madmom's pretrained models are **CC-BY-NC-SA (NonCommercial)**,
-> not MIT, and madmom 0.16.1 (Nov 2018, sdist-only, ≤Py3.7) has a **<70% clean-install
-> rate even fully pinned**. See "Changes from the previous draft" and "Open decisions".
+> **Revised after a 9-agent (3×3) Opus review, then validated by a Phase-0 probe.**
+> There are **two defaults, not one** (this resolves an earlier contradiction in this
+> doc): the **install default is librosa** (ISC, always installs, zero NC/AGPL) — it is
+> also the instant preview + the fallback; the **accuracy default is madmom** (opt-in
+> *install*, then auto-used for the final result once present), chosen because the user
+> requires ~80% out-of-box. This rests on two facts the first draft got wrong —
+> madmom's pretrained models are **CC-BY-NC-SA (NonCommercial)**, not MIT, and madmom
+> 0.16.1 (Nov 2018, sdist-only, ≤Py3.7) is install-fragile — but the **Phase-0 probe
+> PASSED on this machine**, so madmom-as-accuracy-default is viable. See "Changes from
+> the previous draft" and "Decisions".
 
 ## Decisions (resolved with the user)
 
@@ -46,9 +51,11 @@ chord/key engines live in Python; OpenTUI gives a fast, modern TUI. We **depend 
    and are required to run the recognizers. essentia is **AGPL-3.0**. The previous
    plan's "madmom MIT" was wrong.
 2. **Install reality.** madmom 0.16.1 (Nov 2018, sdist-only) targets ≤Py3.7, uses
-   `np.float`/Cython<3, and gets **<70% clean-install success even fully pinned**
-   (Py3.9 / numpy<1.24 / scipy<1.13 / Cython<3, or git main). It cannot be the
-   default dependency. The previous "Py3.10–3.12 / numpy<2" was wrong.
+   `np.float`/Cython<3, and is install-fragile in general (**<70% clean-install on a
+   stranger's machine**). The **validated recipe** (Phase-0 probe, `docs/probe-matrix.md`)
+   is Py3.9 / numpy<1.24 / scipy<1.13 / Cython<3 + the **PyPI 0.16.1 sdist** (which
+   bundles the models — no git submodule fetch needed). The previous "Py3.10–3.12 /
+   numpy<2 / git main" guidance was wrong.
 3. **Therefore (given the user wants ~80% out-of-box, personal use, single
    platform):** **madmom is the v1 DEFAULT accuracy engine** — viable because it only
    has to install on one machine (yours). **librosa (ISC, always installs) is demoted
@@ -71,15 +78,17 @@ and essentia (AGPL) engines usable at all.
 ## Changes from the previous draft (strikes)
 
 1. **Strike "madmom … MIT"** → BSD code, **CC-BY-NC-SA (NonCommercial) models**, required.
-2. **Strike "madmom default / essentia fallback"** → **librosa default**; madmom &
-   essentia are opt-in tiers. "Primary by accuracy" ≠ "default-shipped by reliability."
+2. **Strike "single default engine"** → **two defaults**: librosa = install default +
+   instant preview + fallback; madmom = accuracy default for the final result (opt-in
+   install, NC notice, auto-used once present). essentia = opt-in AGPL alternative, never auto.
 3. **Strike "mirror tempo's `executor.ts`"** → it uses `sh -c` (injection on user
    file paths), buffers + truncates at 4096 bytes, no timeout/cancel. Use **array-form
    `Bun.spawn`** + AbortSignal + timeout (mirror `tempo/src/daemon.ts` instead).
 4. **Strike "`active/personal-library` precedent"** → that path **does not exist**;
    use `finance/` or `free-claude-code/` for the uv precedent.
 5. **Strike "Py3.10–3.12 / numpy<2"** → madmom pin is ≤Py3.9 / numpy<1.24 / scipy<1.13
-   / Cython<3 / git main, isolated in an optional extra.
+   / Cython<3 / pinned PyPI sdist 0.16.1, installed via a scripted `uv pip install
+   --no-build-isolation` (not a uv extra), never in the clean-core lock.
 6. **Strike "chroma-based 7th/extension inference"** → snake oil (chroma can't separate
    maj from maj7). Extended = **refused at MVP** (triads only) with an honest disabled
    toggle; real extended deferred to Phase 4a (Chordino/NNLS or torch, when a checkpoint exists).
@@ -218,7 +227,7 @@ chordTUI/                       # incubation/ first; promote to active/ after Ph
 │   ├── hooks/useAnalysis.ts    # state machine; ONE AbortController per run
 │   └── components/             # App, Header, KeyPanel, ChordTimeline(scrollbox), ProgressionPanel, FilePicker, StatusBar
 ├── engine/                     # Python sidecar (uv-managed)
-│   ├── pyproject.toml          # core deps clean; optional extras [madmom],[essentia]
+│   ├── pyproject.toml          # core deps clean; madmom/essentia = scripted installs (not uv extras), in comments
 │   ├── uv.lock                 # committed; locks ONLY the clean core
 │   ├── schema.json             # JSON Schema mirror of types.ts
 │   ├── mock_sidecar.py         # Phase-0 deliverable
@@ -231,16 +240,25 @@ chordTUI/                       # incubation/ first; promote to active/ after Ph
 ```
 
 **Dependency policy:** core (always installs, clean) = `librosa`, `numpy`, `scipy`,
-`soundfile`. Optional extras `[madmom]` (NC notice) and `[essentia]` (AGPL banner)
-hold their constraints, isolated from core. Committed `uv.lock` locks **only** the
-clean core (default `uv sync` pulls zero NC/AGPL). `bun.lock` exact; v1 ships
+`soundfile`. madmom and essentia are **NOT uv extras** — they are installed by
+`chord setup` via a scripted `uv pip install` (madmom needs `--no-build-isolation`;
+recipe in `docs/probe-matrix.md`) and are documented as comments in `pyproject.toml`,
+so they never enter the resolved graph. Committed `uv.lock` locks **only** the clean
+core (default `uv sync` pulls zero NC/AGPL). `bun.lock` exact; v1 ships
 macOS-arm64 (the `bun run` source path stays cross-platform).
 
 ## 6. Install & launch story
 
-1. **`chord setup`** — extracts the embedded engine sources (compiled-binary distro),
-   creates the uv venv, installs the **clean core** (librosa) by default; prints how
-   to opt into madmom (NC) / essentia (AGPL).
+1. **`chord setup`** — extracts the embedded engine sources (compiled-binary distro)
+   and creates the uv venv. It always installs the **clean core** (librosa). Then,
+   because the project targets ~80% out-of-box, it **prompts to install the madmom
+   accuracy engine** — showing the one-time CC-BY-NC-SA **NonCommercial** notice and
+   **defaulting to yes** (explicit consent, never a silent NC install). So a normal
+   `chord setup` yields the high-accuracy engine; **declining** leaves a working
+   librosa-only install with a clear "accuracy will be lower — re-run `chord setup
+   --engine madmom` to upgrade" message. essentia (AGPL) is a separate explicit opt-in.
+   Non-interactive flags: `--engine librosa|madmom|essentia`, `--no-madmom`,
+   `--accept-noncommercial`.
 2. **Engine dir resolution** (`engineResolve.ts`): `$CHORDTUI_ENGINE_DIR` →
    `~/.local/share/chordtui/engine` → sibling `engine/` (dev).
 3. **Python path resolved ONCE** — reuse `.venv/bin/python`; **no per-call `uv run`**.
@@ -275,11 +293,15 @@ viability gates the headline goal. **Gate:** ① **madmom installs and runs on t
 machine** — ✅ **PASSED 2026-05-22** (Py3.9.6 + numpy 1.23.5; correctly read a synth
 I–IV–V–I as C/F/G/C in C major; recipe in `engine/probe-matrix.md`/`docs/probe-matrix.md`);
 ② contract round-trips (mock
-output validates against `types.ts`+`schema.json` and parses in `engine.ts`); ③ librosa
+output validates against `types.ts` via `validate.ts` AND against `schema.json`/`engine-info.schema.json`
+on the Python side — the validator `engine.ts` will wrap; engine.ts itself lands in Phase 2); ③ librosa
 preview/fallback runs end-to-end; ④ license + repo decided.
 
 **Phase 1 — Engine (librosa-first) ∥ Phase 2 — Frontend (mock-first)** — run in
 parallel against the frozen contract.
+> **Status:** Phase 1 librosa tier ✅ landed; Phase 2 frontend ✅ landed (`engine.ts`,
+> `engineResolve.ts`, `music.ts`, `panels.ts`, `useAnalysis`, the `App` + panels — branch
+> `feat/interactive-tui`). Still open: `cache.ts`, the opt-in `madmom`/`essentia` engine modules.
 - *Engine:* `engines/librosa_engine.py` (caps `["key","chords"]`), `engine_info.py`,
   then `madmom_engine.py` (opt-in; adds keyCandidates/beats/downbeats; **no mypy**),
   `essentia_engine.py` (opt-in); pytest + ruff.
@@ -320,8 +342,9 @@ mini-map, multi-platform builds (beyond macOS-arm64).
 
 ## 9. Verification
 
-- **Phase 0:** mock output validates against `types.ts`+`schema.json` and parses in
-  `engine.ts`; the three gate conditions checked in `docs/probe-matrix.md`.
+- **Phase 0:** mock output validates against `types.ts` (via `validate.ts`) AND
+  `schema.json`/`engine-info.schema.json` (Python) — the validator `engine.ts` will wrap
+  (engine.ts is built in Phase 2); the gate conditions tracked in `docs/probe-matrix.md`.
 - **Phase 1:** `uv run python analyze.py --engine librosa --file <fixture.wav> --json`
   → valid contract JSON; bad path prints error JSON with exit 2/3/4; stderr emits NDJSON
   stages; `ruff` + `pytest` green.
@@ -342,9 +365,14 @@ mini-map, multi-platform builds (beyond macOS-arm64).
 ## 10. Risks (top)
 
 1. **madmom won't install on a clean 2026 machine** (<70% even pinned) — biggest stall
-   risk. Mitigated by librosa default + madmom opt-in, never in the blocking path.
+   risk. `chord setup` does install madmom by default (with NC consent) for the ~80%
+   goal, but it is mitigated by: librosa always installs as the clean base, the JSON
+   contract is engine-agnostic, the madmom **CI** accuracy gate runs nightly/non-blocking
+   (never blocks a PR), and a failed madmom install degrades the tool to librosa rather
+   than breaking it.
 2. **NC/AGPL exposure on a public repo** — gated on Open decision (a); clean-core lock,
-   opt-in extras, banners. Critical-if-commercial, low-if-personal.
+   scripted opt-in installs (madmom/essentia are not in the lock), banners.
+   Critical-if-commercial, low-if-personal.
 3. **`bun build --compile` + OpenTUI native deps unverified** — Phase-0 probe; fall back
    to the `bun run` source path.
 4. **Accuracy underdelivery** — librosa floor is honest-but-weak; set expectations;

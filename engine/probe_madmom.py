@@ -10,8 +10,8 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-import numpy as np
-from scipy.io import wavfile
+import numpy as np  # noqa: E402
+from scipy.io import wavfile  # noqa: E402
 
 SR = 44100
 
