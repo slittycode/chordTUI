@@ -1,0 +1,44 @@
+{
+  "audio": "i_iv_v_i_a_minor.wav",
+  "durationSec": 6.4,
+  "key": {
+    "tonic": "A",
+    "mode": "minor"
+  },
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 1.6,
+      "root": "A",
+      "quality": "min",
+      "label": "Am"
+    },
+    {
+      "start": 1.6,
+      "end": 3.2,
+      "root": "D",
+      "quality": "min",
+      "label": "Dm"
+    },
+    {
+      "start": 3.2,
+      "end": 4.8,
+      "root": "E",
+      "quality": "maj",
+      "label": "E"
+    },
+    {
+      "start": 4.8,
+      "end": 6.4,
+      "root": "A",
+      "quality": "min",
+      "label": "Am"
+    }
+  ],
+  "expectedRomanNumerals": [
+    "i",
+    "iv",
+    "V",
+    "i"
+  ]
+}

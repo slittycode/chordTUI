@@ -14,8 +14,10 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
-import { EngineAbortError, EngineUnavailableError, runEngine, runEngineInfo } from "../core/engine";
+import { EngineAbortError, EngineUnavailableError, runEngineInfo } from "../core/engine";
 import type { RunEngineResult } from "../core/engine";
+import { analyzeWithCache } from "../core/cache";
+import { hasMadmomConsent } from "../core/consent";
 import { resolveEngine } from "../core/engineResolve";
 import type { Analysis, EngineEvent, EngineInfoResponse, EngineName, EngineStage } from "../core/types";
 
@@ -172,11 +174,7 @@ export function makeDefaultDriver(): EngineDriver {
   return {
     isMock: r.isMock,
     analyze: (engine, file, { signal, onEvent }) =>
-      runEngine({
-        command: [...r.analyzeBase, "--file", file, "--json", "--engine", engine],
-        signal,
-        onEvent,
-      }),
+      analyzeWithCache(r.analyzeBase, engine, file, { isMock: r.isMock, signal, onEvent }),
     engineInfo: (engine, { signal }) =>
       runEngineInfo({ command: [...r.engineInfoBase, "--engine", engine], signal }),
   };
@@ -222,7 +220,9 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
       driver
         .engineInfo("madmom", { signal: probeAc.signal })
         .then((info) => {
-          if (mountedRef.current) setUpgradeAvailable(info.name === "madmom");
+          // Auto-upgrade only when madmom is installed AND the user has accepted its
+          // NonCommercial model licence (PLAN.md §6) — never silently use NC models.
+          if (mountedRef.current) setUpgradeAvailable(info.name === "madmom" && hasMadmomConsent());
         })
         .catch(() => {
           /* unavailable / aborted — leave upgradeAvailable false */

@@ -25,6 +25,14 @@ export function App({ driver }: { driver?: EngineDriver }) {
 
   const running = state.phase === "running-preview" || state.phase === "running-upgrade";
 
+  // Quit must never orphan a child python: cancel the in-flight run first (engine.ts walks the
+  // SIGTERM→grace→SIGKILL ladder), THEN tear down the renderer. The unmount effect also aborts,
+  // but cancelling here is deterministic regardless of renderer.destroy()'s unmount timing.
+  const quit = () => {
+    if (running) cancel();
+    renderer.destroy();
+  };
+
   useKeyboard((key) => {
     if (key.repeated) return;
     if (appView === "picker") {
@@ -37,14 +45,14 @@ export function App({ driver }: { driver?: EngineDriver }) {
       }
       // `q` quits too — but only when a text <input> is NOT focused, where it'd be a character.
       if (key.name === "q" && !(renderer.currentFocusedRenderable instanceof InputRenderable)) {
-        renderer.destroy();
+        quit();
         return;
       }
       return; // otherwise let the focused select/input own letters / arrows / enter
     }
     // results view
     if (key.name === "q") {
-      renderer.destroy();
+      quit();
     } else if (key.name === "escape") {
       if (running) cancel();
       else setAppView("picker");

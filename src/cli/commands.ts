@@ -17,9 +17,10 @@ import {
   EngineAbortError,
   EngineRunError,
   EngineUnavailableError,
-  runEngine,
   runEngineInfo,
 } from "../core/engine";
+import { analyzeWithCache } from "../core/cache";
+import { hasMadmomConsent, setMadmomConsent } from "../core/consent";
 import { resolveEngine } from "../core/engineResolve";
 import { ContractError } from "../core/validate";
 import { ERROR_KIND_EXIT, EXIT } from "../core/types";
@@ -94,10 +95,31 @@ export interface AnalyzeOptions {
   json?: boolean;
   io?: CliIO;
   signal?: AbortSignal;
-  /** Test seam: inject the analyze argv prefix (skips resolveEngine). */
+  /** Bypass the result cache (read and write). */
+  noCache?: boolean;
+  /** Test seam: inject the analyze / engine-info argv prefixes (skips resolveEngine). */
   analyzeBase?: string[];
+  engineInfoBase?: string[];
   isMock?: boolean;
   mockExplicit?: boolean;
+}
+
+/**
+ * The engine to use when the user didn't pass `--engine`: madmom iff the user has accepted its
+ * NonCommercial licence AND it is actually installed (a cheap engine-info probe), else librosa.
+ * The probe is skipped entirely until consent exists, so the common path adds zero overhead.
+ */
+async function pickDefaultEngine(
+  engineInfoBase: string[] | undefined,
+  isMock: boolean,
+): Promise<EngineName> {
+  if (isMock || !engineInfoBase || !hasMadmomConsent()) return "librosa";
+  try {
+    const info = await runEngineInfo({ command: [...engineInfoBase, "--engine", "madmom"] });
+    return info.name === "madmom" ? "madmom" : "librosa";
+  } catch {
+    return "librosa"; // not installed / probe failed → fall back to the clean core
+  }
 }
 
 export async function cmdAnalyze(opts: AnalyzeOptions): Promise<number> {
@@ -105,30 +127,38 @@ export async function cmdAnalyze(opts: AnalyzeOptions): Promise<number> {
   const json = opts.json ?? false;
   try {
     let base: string[];
+    let engineInfoBase: string[] | undefined;
     let isMock: boolean;
     let mockExplicit: boolean;
     if (opts.analyzeBase) {
       base = opts.analyzeBase;
+      engineInfoBase = opts.engineInfoBase;
       isMock = opts.isMock ?? false;
       mockExplicit = opts.mockExplicit ?? false;
     } else {
       const r = resolveEngine();
       base = r.analyzeBase;
+      engineInfoBase = r.engineInfoBase;
       isMock = r.isMock;
       mockExplicit = r.mockExplicit;
     }
     gateMock(isMock, mockExplicit, json);
 
-    // Always pass --json to the sidecar (its stdout is one JSON doc per the contract); the
-    // CLI's own `json` flag only decides raw-vs-summary rendering.
-    const argv = [
-      ...base,
-      "--file",
-      opts.file,
-      "--json",
-      ...(opts.engine ? ["--engine", opts.engine] : []),
-    ];
-    const result = await runEngine({ command: argv, signal: opts.signal });
+    let engine: EngineName;
+    if (opts.engine) {
+      engine = opts.engine;
+      if (engine === "madmom") setMadmomConsent(); // an explicit choice IS consent (PLAN.md §6)
+    } else {
+      engine = await pickDefaultEngine(engineInfoBase, isMock);
+    }
+
+    // analyzeWithCache appends --file/--json/--engine; a re-run of the same audio hits the cache
+    // (skipped for the mock, whose data is fake). The CLI `json` flag only picks the rendering.
+    const result = await analyzeWithCache(base, engine, opts.file, {
+      noCache: opts.noCache,
+      isMock,
+      signal: opts.signal,
+    });
     if (result.kind === "error") {
       const { kind, detail, hint } = result.value;
       io.err(`Analysis failed: ${detail}${hint ? ` (${hint})` : ""}\n`);
@@ -334,24 +364,62 @@ export async function cmdDoctor(opts: { io?: CliIO } = {}): Promise<number> {
   return EXIT.ok;
 }
 
-// ── setup (placeholder) ─────────────────────────────────────────────
+// ── setup ───────────────────────────────────────────────────────────
+// Records madmom NonCommercial consent and reports engine state. The (slow, fragile, NC)
+// madmom install itself is deferred to a documented manual recipe rather than run here — once
+// installed + consented, the CLI default and the TUI auto-upgrade reach for madmom.
 
-export function cmdSetup(opts: { io?: CliIO } = {}): number {
+export interface SetupOptions {
+  io?: CliIO;
+  /** Accept madmom's CC-BY-NC-SA (NonCommercial) model licence and persist that consent. */
+  acceptNoncommercial?: boolean;
+}
+
+const MADMOM_RECIPE = [
+  "  uv venv --python 3.9 engine/.venv",
+  '  uv pip install --python engine/.venv "cython<3" "numpy<1.24" "scipy<1.13" \\',
+  '       "setuptools<60" wheel pip librosa soundfile',
+  "  uv pip install --python engine/.venv --no-build-isolation \"madmom==0.16.1\"",
+];
+
+export function cmdSetup(opts: SetupOptions = {}): number {
   const io = opts.io ?? defaultIO;
-  io.out(
-    [
-      "`chord setup` is not implemented yet.",
-      "",
-      "It will create the Python venv and install the analysis engines:",
-      "  • librosa  (ISC)            always — the clean base, instant preview + fallback",
-      "  • madmom   (BSD code;       opt-in for ~80% accuracy; one-time CC-BY-NC-SA",
-      "              CC-BY-NC-SA                NonCommercial consent, defaulting to yes",
-      "              models)",
-      "  • essentia (AGPL-3.0)       separate explicit opt-in alternative",
-      "",
-      "Until then, the bundled mock sidecar provides contract-conformant sample output.",
-      "See PLAN.md §6.",
-    ].join("\n") + "\n",
-  );
+  const r = resolveEngine();
+  const madmom = probeCommand([r.python, "-c", "import madmom; print(madmom.__version__)"]);
+
+  if (opts.acceptNoncommercial) setMadmomConsent();
+  const consent = hasMadmomConsent();
+
+  const lines: string[] = ["chordTUI setup", ""];
+  lines.push("Engines:");
+  lines.push("  • librosa  (ISC)            clean core — instant preview + always-on fallback");
+  lines.push("  • madmom   (BSD code,       opt-in ~80%-accuracy tier; pretrained models are");
+  lines.push("              CC-BY-NC-SA      CC-BY-NC-SA 4.0 NonCommercial");
+  lines.push("              models)");
+  lines.push("  • essentia (AGPL-3.0)       separate explicit opt-in (no engine module yet)");
+  lines.push("");
+  lines.push(`  madmom installed : ${madmom.ok ? `yes (${madmom.detail})` : "no"}`);
+  lines.push(`  madmom consent   : ${consent ? "accepted (CC-BY-NC-SA NonCommercial)" : "not given"}`);
+  lines.push("");
+
+  if (opts.acceptNoncommercial) {
+    lines.push("Recorded madmom NonCommercial (CC-BY-NC-SA) consent.");
+  }
+
+  if (madmom.ok && consent) {
+    lines.push("madmom is installed and consented — it is now the default accuracy engine.");
+  } else {
+    if (!consent) {
+      lines.push("madmom uses CC-BY-NC-SA (NonCommercial) models. To accept and enable it, run:");
+      lines.push("  chord setup --accept-noncommercial");
+      lines.push("");
+    }
+    if (!madmom.ok) {
+      lines.push("Install madmom into the engine venv (macOS-arm64, the validated recipe):");
+      lines.push(...MADMOM_RECIPE);
+      lines.push("(details in docs/probe-matrix.md). Until then, analysis uses librosa.");
+    }
+  }
+  io.out(lines.join("\n") + "\n");
   return EXIT.ok;
 }
