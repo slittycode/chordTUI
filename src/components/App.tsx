@@ -8,6 +8,7 @@
 
 import { useState } from "react";
 import { useKeyboard, useRenderer } from "@opentui/react";
+import { InputRenderable } from "@opentui/core";
 
 import { useAnalysis } from "../hooks/useAnalysis";
 import type { EngineDriver } from "../hooks/useAnalysis";
@@ -17,7 +18,7 @@ import { AnalysisView } from "./AnalysisView";
 import { StatusBar } from "./StatusBar";
 import { C } from "./theme";
 
-export function App({ driver }: { driver?: EngineDriver } = {}) {
+export function App({ driver }: { driver?: EngineDriver }) {
   const renderer = useRenderer();
   const { state, analyze, cancel, isMock, mode, toggleMode } = useAnalysis(driver);
   const [appView, setAppView] = useState<"picker" | "results">("picker");
@@ -27,8 +28,19 @@ export function App({ driver }: { driver?: EngineDriver } = {}) {
   useKeyboard((key) => {
     if (key.repeated) return;
     if (appView === "picker") {
-      if (key.name === "escape" && running) cancel();
-      return; // let the focused select/input own letters / arrows / enter
+      // escape is never typed text, and global handlers fire before the focused renderable, so
+      // it's a safe universal quit (or cancel, mid-run) regardless of which control has focus.
+      if (key.name === "escape") {
+        if (running) cancel();
+        else renderer.destroy();
+        return;
+      }
+      // `q` quits too — but only when a text <input> is NOT focused, where it'd be a character.
+      if (key.name === "q" && !(renderer.currentFocusedRenderable instanceof InputRenderable)) {
+        renderer.destroy();
+        return;
+      }
+      return; // otherwise let the focused select/input own letters / arrows / enter
     }
     // results view
     if (key.name === "q") {
@@ -47,6 +59,11 @@ export function App({ driver }: { driver?: EngineDriver } = {}) {
     setAppView("results");
     analyze(absPath);
   };
+
+  const hints =
+    appView === "picker"
+      ? "enter open · esc quit"
+      : "q quit · f file · esc back · m mode";
 
   return (
     <box flexDirection="column" height="100%" backgroundColor={C.bg}>
@@ -71,7 +88,7 @@ export function App({ driver }: { driver?: EngineDriver } = {}) {
         )}
       </box>
 
-      <StatusBar state={state} />
+      <StatusBar state={state} hints={hints} />
     </box>
   );
 }

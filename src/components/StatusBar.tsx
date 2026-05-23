@@ -29,12 +29,12 @@ function statusLine(state: AnalysisState): { text: string; color: string } {
   return { text: String(state.phase), color: C.dim }; // unreachable; keeps TS happy
 }
 
-export function StatusBar({ state }: { state: AnalysisState }) {
+export function StatusBar({ state, hints }: { state: AnalysisState; hints: string }) {
   const s = statusLine(state);
   return (
     <box flexDirection="row" justifyContent="space-between" paddingX={1} backgroundColor={C.panel}>
       <text fg={s.color}>{s.text}</text>
-      <text fg={C.dim}>q quit · f file · esc cancel/back · m mode</text>
+      <text fg={C.dim}>{hints}</text>
     </box>
   );
 }
