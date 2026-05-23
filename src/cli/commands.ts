@@ -12,8 +12,6 @@
 // so sample chords never leak into a script or a bug report.
 
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 
 import {
   EngineAbortError,
@@ -22,6 +20,7 @@ import {
   runEngine,
   runEngineInfo,
 } from "../core/engine";
+import { resolveEngine } from "../core/engineResolve";
 import { ContractError } from "../core/validate";
 import { ERROR_KIND_EXIT, EXIT } from "../core/types";
 import type { Analysis, EngineName } from "../core/types";
@@ -47,78 +46,9 @@ export const defaultIO: CliIO = {
   },
 };
 
-// ── engine resolution ───────────────────────────────────────────────
-
-export interface ResolvedEngine {
-  engineDir: string;
-  python: string;
-  /** True when the resolved sidecar is the bundled mock (fake data). */
-  isMock: boolean;
-  /** True when the user explicitly pointed at a sidecar via $CHORDTUI_SIDECAR. */
-  mockExplicit: boolean;
-  analyzeBase: string[];
-  engineInfoBase: string[];
-}
-
-function resolveEngineDir(): string {
-  const fromEnv = process.env["CHORDTUI_ENGINE_DIR"];
-  if (fromEnv && existsSync(fromEnv)) return fromEnv;
-  const userDir = join(homedir(), ".local", "share", "chordtui", "engine");
-  if (existsSync(userDir)) return userDir;
-  return join(import.meta.dir, "..", "..", "engine"); // dev fallback: repo engine/
-}
-
-function resolvePython(engineDir: string): string {
-  const fromEnv = process.env["CHORDTUI_PYTHON"];
-  if (fromEnv) return fromEnv;
-  const venv = join(engineDir, ".venv", "bin", "python");
-  return existsSync(venv) ? venv : "python3";
-}
-
-/**
- * Resolve where (and how) to invoke the analysis sidecar. The bases are per-command because
- * the mock is one flat-argparse file with a positional `command` (`analyze`/`engine-info`),
- * whereas the real engine (PLAN.md §5) is two scripts. The Python path is resolved ONCE here.
- */
-export function resolveEngine(): ResolvedEngine {
-  const engineDir = resolveEngineDir();
-  const python = resolvePython(engineDir);
-
-  const explicit = process.env["CHORDTUI_SIDECAR"];
-  if (explicit) {
-    return {
-      engineDir,
-      python,
-      isMock: true,
-      mockExplicit: true,
-      analyzeBase: [python, explicit, "analyze"],
-      engineInfoBase: [python, explicit, "engine-info"],
-    };
-  }
-
-  const analyzePy = join(engineDir, "analyze.py");
-  const engineInfoPy = join(engineDir, "engine_info.py");
-  if (existsSync(analyzePy) && existsSync(engineInfoPy)) {
-    return {
-      engineDir,
-      python,
-      isMock: false,
-      mockExplicit: false,
-      analyzeBase: [python, analyzePy],
-      engineInfoBase: [python, engineInfoPy],
-    };
-  }
-
-  const mock = join(engineDir, "mock_sidecar.py");
-  return {
-    engineDir,
-    python,
-    isMock: true,
-    mockExplicit: false,
-    analyzeBase: [python, mock, "analyze"],
-    engineInfoBase: [python, mock, "engine-info"],
-  };
-}
+// Engine resolution (resolveEngine / ResolvedEngine) lives in ../core/engineResolve so both
+// the CLI and the TUI's useAnalysis hook can share it. Re-exported here is unnecessary — the
+// only external consumer (tests) drives the commands via the injected `*Base` seam.
 
 /** Refuse to run the mock when it isn't safe to show fake data (see Mock policy above). */
 function gateMock(isMock: boolean, mockExplicit: boolean, json: boolean): void {

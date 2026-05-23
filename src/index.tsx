@@ -1,17 +1,26 @@
 #!/usr/bin/env bun
 // chordTUI entrypoint — dual-mode router.
 //
-// args → CLI commands (analyze / engine-info / doctor / setup). No args → interactive TUI,
-// not implemented until the TUI milestone.
+// args → CLI commands (analyze / engine-info / doctor / setup). No args → interactive OpenTUI
+// app (mounted lazily so CLI usage never loads the renderer).
 //
 // Exit codes are set via `process.exitCode`, NOT `process.exit()`: defaultIO writes to
 // process.stdout, which is asynchronous on a pipe, and `process.exit()` can drop a buffered
 // `--json` write before it flushes. Assigning `process.exitCode` lets the event loop drain
-// (timers cleared, child reaped) and flush stdout first.
+// (timers cleared, child reaped) and flush stdout first. The TUI relies on the same discipline:
+// it mounts and `main()` returns 0, but the renderer keeps the loop alive until `renderer.destroy()`.
 
-import { CURRENT_CONTRACT_VERSION } from "./core/types";
+import { CURRENT_CONTRACT_VERSION, EXIT } from "./core/types";
 import type { EngineName } from "./core/types";
 import { cmdAnalyze, cmdDoctor, cmdEngineInfo, cmdSetup } from "./cli/commands";
+
+// A runtime crash inside the mounted TUI would otherwise be masked by the no-arg branch's
+// `return 0`. Capture it as a nonzero exit code WITHOUT calling process.exit() (keeps the
+// stdout-flush discipline above). CLI commands complete synchronously and never reach here.
+process.on("uncaughtException", (err) => {
+  process.exitCode = EXIT.analysisFailed;
+  process.stderr.write(`Fatal: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
+});
 
 const ENGINE_NAMES: readonly string[] = ["librosa", "madmom", "essentia"];
 
@@ -24,7 +33,7 @@ Usage:
                          print the engine's capabilities / versions
   chord doctor           report engine / python / ffmpeg / librosa / madmom status
   chord setup            install the analysis engine (not yet implemented)
-  chord                  interactive TUI (not yet implemented)
+  chord                  launch the interactive TUI
   chord --help           show this help
 
 Notes:
@@ -75,11 +84,19 @@ async function main(): Promise<number> {
   const rest = argv.slice(1);
 
   switch (command) {
-    case undefined:
-      process.stderr.write(
-        "Interactive TUI is not implemented yet. Try `chord analyze <file>` or `chord --help`.\n",
-      );
-      return 1;
+    case undefined: {
+      // Lazy-load the renderer + React tree so CLI usage never pays for OpenTUI.
+      const { createElement } = await import("react");
+      const { createCliRenderer } = await import("@opentui/core");
+      const { createRoot } = await import("@opentui/react");
+      const { App } = await import("./components/App");
+      const { ErrorBoundary } = await import("./components/ErrorBoundary");
+      const renderer = await createCliRenderer();
+      // createElement (not JSX) for the class boundary: OpenTUI's JSX.ElementClass and React 19's
+      // class-component constructor typing don't line up, but createElement types it fine.
+      createRoot(renderer).render(createElement(ErrorBoundary, null, createElement(App)));
+      return EXIT.ok; // renderer keeps the event loop alive; exits on renderer.destroy()
+    }
 
     case "--help":
     case "-h":
