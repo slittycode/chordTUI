@@ -7,7 +7,7 @@
 
 import { test, expect } from "bun:test";
 import { testRender } from "@opentui/react/test-utils";
-import { createElement } from "react";
+import { act, createElement } from "react";
 import { useAnalysis } from "../../src/hooks/useAnalysis";
 import type { EngineDriver } from "../../src/hooks/useAnalysis";
 import type { RunEngineResult } from "../../src/core/engine";
@@ -45,10 +45,16 @@ function Harness({ driver, sink }: { driver: EngineDriver; sink: Sink }) {
   return createElement("text", null, a.state.phase);
 }
 
-const flush = async (renderOnce: () => Promise<void>) => {
-  await new Promise((r) => setTimeout(r, 10));
-  await Promise.resolve();
-  await renderOnce();
+// Run `action` (if any) and let its synchronous dispatches (ANALYZE_REQUESTED, CANCEL_REQUESTED)
+// AND the resulting async ones (PREVIEW_DONE/ABORTED) settle — all inside one act() batch so React
+// doesn't warn about state updates outside an act() boundary.
+const flush = async (renderOnce: () => Promise<void>, action?: () => void) => {
+  await act(async () => {
+    action?.();
+    await new Promise((r) => setTimeout(r, 10));
+    await Promise.resolve();
+    await renderOnce();
+  });
 };
 
 test("cancel() walks the abort: the in-flight run's signal becomes aborted", async () => {
@@ -60,12 +66,10 @@ test("cancel() walks the abort: the in-flight run's signal becomes aborted", asy
   );
   await flush(renderOnce);
 
-  sink.analyze!("song.wav");
-  await flush(renderOnce);
+  await flush(renderOnce, () => sink.analyze!("song.wav"));
   expect(capture.signal).toBeDefined();
   expect(capture.signal!.aborted).toBe(false);
 
-  sink.cancel!();
-  await flush(renderOnce);
+  await flush(renderOnce, () => sink.cancel!());
   expect(capture.signal!.aborted).toBe(true);
 });

@@ -4,12 +4,16 @@ on:
   pull_request:
     branches: [main]
   push:
-    branches: [main, feat/interactive-tui]
+    branches: [main]
 
 jobs:
   test:
-    name: Bun and Python checks
-    runs-on: ubuntu-latest
+    name: Bun and Python checks (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
 
     steps:
       - name: Check out repository
