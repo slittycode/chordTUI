@@ -299,6 +299,9 @@ preview/fallback runs end-to-end; ④ license + repo decided.
 
 **Phase 1 — Engine (librosa-first) ∥ Phase 2 — Frontend (mock-first)** — run in
 parallel against the frozen contract.
+> **Status:** Phase 1 librosa tier ✅ landed; Phase 2 frontend ✅ landed (`engine.ts`,
+> `engineResolve.ts`, `music.ts`, `panels.ts`, `useAnalysis`, the `App` + panels — branch
+> `feat/interactive-tui`). Still open: `cache.ts`, the opt-in `madmom`/`essentia` engine modules.
 - *Engine:* `engines/librosa_engine.py` (caps `["key","chords"]`), `engine_info.py`,
   then `madmom_engine.py` (opt-in; adds keyCandidates/beats/downbeats; **no mypy**),
   `essentia_engine.py` (opt-in); pytest + ruff.
