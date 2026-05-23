@@ -98,13 +98,15 @@ The locked contract round-trips both ways against the committed mock sidecar:
 - Note: `engine.ts` (the runtime *consumer* that wraps `validate.ts`) is built in
   Milestone B/Phase 2 — Phase 0 proves the contract + validator, not the spawn wrapper.
 
-## 4. `bun build --compile` with OpenTUI native deps on macOS-arm64 — ◑ PARTIAL (2026-05-23)
-`bun build --compile src/index.tsx --outfile chord` **succeeds** (52 modules, ~0.3 s), and the
-compiled binary runs the **CLI** end to end: `chord --help` and
-`chord analyze <fixture> --json` (with `CHORDTUI_ENGINE_DIR` pointing at the engine) both produce
-correct output. **Still unverified:** the no-arg **TUI** path, which lazy-loads the `@opentui/*`
-per-platform native deps — it needs an interactive TTY, so it isn't exercised here. Confirm via
-the manual TUI smoke; if the native deps don't embed, ship the `bun run` source path.
+## 4. `bun build --compile` with OpenTUI native deps on macOS-arm64 — ✅ PASS (2026-05-24)
+`bun build --compile src/index.tsx --outfile chord` **succeeds** (52 modules, ~0.2 s). The
+compiled binary runs the **CLI** (`chord --help`, `chord analyze <fixture> --json` with
+`CHORDTUI_ENGINE_DIR` set) **and the no-arg TUI**: launched inside a pty (`CHORDTUI_ENGINE_DIR`
+set), the binary renders the full OpenTUI frame — Header + the `OPEN AN AUDIO FILE` FilePicker —
+and quits cleanly (`exit 0`). So the `@opentui/*` per-platform native deps **embed and run** from
+a single compiled binary on macOS-arm64; no need to fall back to the `bun run` source path. (This
+resolves the earlier PARTIAL — the TUI/native-dep path was the only thing left, and a pty exercises
+it without a human terminal.)
 
 ## 5. v1 integration smoke (real engines through CLI + cache) — ✅ PASS (2026-05-23)
 End-to-end on the committed fixtures, librosa via the real `analyze.py`:
@@ -116,3 +118,15 @@ End-to-end on the committed fixtures, librosa via the real `analyze.py`:
 - `chord setup` reports engine/consent state and the CC-BY-NC-SA notice; madmom default selection
   + TUI auto-upgrade are gated on install **and** recorded consent. madmom itself remains
   unavailable (exit 3) until installed — verified by the registry gate.
+
+## 6. TUI quit-no-orphan smoke on macOS-arm64 — ✅ PASS (2026-05-24)
+Pressing `q` while a real analysis is running must leave **no** orphaned `analyze.py` child. Driven
+in a pty: a ~602 s synthetic WAV in a temp cwd (so librosa stays busy) + a fresh
+`CHORDTUI_CACHE_DIR` (forces a cache-miss → a real child); launch the TUI, Enter to pick the file,
+poll for the child, then `q`.
+- Child caught alive mid-run (`pgrep -f <wav>` → one PID, ~0.3 s after pick).
+- After `q` (→ `App.tsx` `quit()` → `cancel()` → the `engine.ts` SIGTERM→SIGKILL ladder) the child
+  was reaped in **~0.04 s**; `pgrep` after = empty; no leftover process.
+- This is the live confirmation of the standing automated chain: `tests/ts/cancel.test.tsx` (`q`'s
+  `cancel()` flips the in-flight AbortSignal to aborted) → `tests/ts/engine.test.ts` ("kills the
+  child on timeout — no orphan survives the grace window").
