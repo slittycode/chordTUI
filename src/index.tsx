@@ -31,9 +31,9 @@ Usage:
                          analyze an audio file (key + chords + progression)
   chord engine-info [--engine X] [--json]
                          print the engine's capabilities / versions
-  chord doctor           report engine / python / ffmpeg / librosa / madmom status
-  chord setup [--accept-noncommercial]
-                         report engine state; record madmom NonCommercial consent
+  chord doctor           per-engine table: installed / working (ran on a WAV) / license / default
+  chord setup [--engine librosa|madmom|essentia] [--no-madmom] [--accept-noncommercial]
+                         install the clean librosa core; with consent, also install madmom
   chord                  launch the interactive TUI
   chord --help           show this help
 
@@ -144,7 +144,7 @@ async function main(): Promise<number> {
       return cmdDoctor({});
 
     case "setup":
-      return cmdSetup({ acceptNoncommercial: rest.includes("--accept-noncommercial") });
+      return cmdSetup({ argv: rest, isTTY: process.stdout.isTTY === true });
 
     default:
       process.stderr.write(`Unknown command: "${command}"\nRun "chord --help".\n`);

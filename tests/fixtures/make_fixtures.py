@@ -1,15 +1,20 @@
 #!/usr/bin/env python3
 """Synthesize the CC0 accuracy fixtures (audio + ground truth).
 
-Pure additive-sine triads (numpy) — the same approach as engine/probe_madmom.py and
-tests/py/test_librosa_engine.py. There is no soundfont and no recording, so the audio is
-CC0 by construction (PLAN.md §9 named fluidsynth+soundfont, but fluidsynth is not installed
-and a soundfont would add a fragile, licensed dependency; clean sines also keep the floor
-gate honest — see docs/probe-matrix.md).
+Additive triads (numpy) with a small harmonic series per note — no soundfont and no recording,
+so the audio is CC0 by construction (PLAN.md §9 named fluidsynth+soundfont, but fluidsynth is
+not installed and a soundfont would add a fragile, licensed dependency).
 
-These are the *easiest* possible inputs: sustained triads, no timbre/transients/noise. They
-prove the engine runs end-to-end on a representative progression set; they do NOT measure
-real-world accuracy.
+Why harmonics + an octave-4 register (not pure sines at C3): madmom's CNN key model was trained on
+real-instrument spectra and cannot classify a bare-fundamental triad — at C3 it returned the wrong
+key at ~0.16 confidence. BOTH a higher register (C4) AND ~6 harmonics at 1/h amplitude are needed
+for madmom to recover the key confidently (p≈0.98 on the unambiguous fixtures). librosa's chroma
+key/chord detection is unaffected by either (chroma folds octaves, and a triad's harmonics fall
+mostly on in-key pitch classes — the librosa blocking gate stays at key=1.000). Do NOT "simplify"
+these back to pure sines or a lower octave — that silently re-breaks the madmom accuracy gate.
+
+These are still easy inputs: sustained triads, no transients/noise. They prove the engines run
+end-to-end on a representative progression set; they do NOT measure real-world accuracy.
 
 Run from the repo root to (re)generate the committed fixtures:
     uv run --project engine python tests/fixtures/make_fixtures.py
@@ -26,7 +31,8 @@ from scipy.io import wavfile
 SR = 22050  # librosa.load resamples to this anyway; synthesizing here keeps files small
 CHORD_SEC = 1.6  # long enough for stable CQT chroma; matches the existing librosa test
 SILENCE_SEC = 1.0
-ROOT_MIDI = 48  # octave-3 root; thirds/fifths stack above. C3 = 48.
+ROOT_MIDI = 60  # octave-4 root; thirds/fifths stack above. C4 (middle C) = 60.
+HARMONICS = 6  # additive harmonics per note (1/h amplitude) — see the module header for why
 
 # Sharp-only pitch-class names (the librosa engine emits roots from this table); ground truth
 # may use flats (e.g. "Ab") — the accuracy metric compares roots by pitch class, not string.
@@ -64,7 +70,13 @@ def _triad_freqs(root, quality):
 
 def _tone(freqs, dur):
     t = np.linspace(0, dur, int(SR * dur), endpoint=False)
-    sig = sum(np.sin(2 * np.pi * f * t) for f in freqs)
+    # Each note = fundamental + HARMONICS overtones at 1/h amplitude (a simple harmonic timbre).
+    # All overtones here stay well under Nyquist (highest fundamental ≈ 620 Hz × 6 ≈ 3.7 kHz).
+    sig = sum(
+        (1.0 / h) * np.sin(2 * np.pi * f * h * t)
+        for f in freqs
+        for h in range(1, HARMONICS + 1)
+    )
     env = np.ones_like(sig)
     n = max(1, int(0.01 * SR))  # 10 ms attack/release to avoid clicks
     env[:n] = np.linspace(0, 1, n)

@@ -140,8 +140,10 @@ def test_empty_audio_is_decode_failed(tmp_path):
     assert json.loads(p.stdout)["error"]["kind"] == "decode_failed"
 
 
-def test_unimplemented_engine_is_unavailable(cmajor_wav):
-    p = _run(ANALYZE, "--engine", "madmom", "--file", str(cmajor_wav), "--json")
+def test_unavailable_engine_returns_engine_unavailable(cmajor_wav):
+    # essentia has no engine module (deferred), so it stays hard-unavailable regardless of
+    # what's installed — unlike madmom, which becomes available after `chord setup`.
+    p = _run(ANALYZE, "--engine", "essentia", "--file", str(cmajor_wav), "--json")
     assert p.returncode == 3, p.stdout
     assert json.loads(p.stdout)["error"]["kind"] == "engine_unavailable"
 
@@ -165,9 +167,9 @@ def test_engine_info_validates_against_schema():
     assert info["capabilities"] == ["key", "chords"]
 
 
-def test_engine_info_unavailable_for_madmom():
-    # Assert exit code + kind only — the error envelope is NOT an EngineInfoResponse, so it
-    # must not be validated against engine-info.schema.json.
-    p = _run(ENGINE_INFO, "--engine", "madmom")
+def test_engine_info_unavailable_for_essentia():
+    # essentia stays hard-unavailable (no engine module). Assert exit code + kind only — the
+    # error envelope is NOT an EngineInfoResponse, so it must not be validated against the schema.
+    p = _run(ENGINE_INFO, "--engine", "essentia")
     assert p.returncode == 3, p.stdout
     assert json.loads(p.stdout)["error"]["kind"] == "engine_unavailable"

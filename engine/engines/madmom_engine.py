@@ -16,7 +16,27 @@ import warnings
 warnings.filterwarnings("ignore")
 
 EPS = 1e-6
+NAME = "madmom"
 _LICENSE = "CC-BY-NC-SA-4.0"  # the pretrained models, which produce the accuracy, are NC
+_CONFIDENCE_KIND = "posterior"
+_MODEL_VERSIONS = {"chord": "deepchroma-crf", "key": "cnnkey"}
+
+
+def engine_block():
+    """Engine metadata block (the contract `engine` object), sans contractVersion/capabilities.
+
+    engine_info._madmom_info() reuses this so engine-info and analyze report IDENTICAL
+    version + modelVersions — the cache staleness check (cache.ts expectedEngine) depends on it.
+    """
+    import madmom
+
+    return {
+        "name": NAME,
+        "version": madmom.__version__,
+        "license": _LICENSE,
+        "modelVersions": dict(_MODEL_VERSIONS),
+        "confidenceKind": _CONFIDENCE_KIND,
+    }
 
 
 def _parse_chord_label(label):
@@ -35,8 +55,21 @@ def _parse_chord_label(label):
 
 
 def _parse_key_label(label):
-    """madmom key label -> (tonic, mode). 'c major'->('C','major'); 'db minor'->('Db','minor')."""
-    name, mode = str(label).strip().lower().split()
+    """madmom key label -> (tonic, mode). 'c major'->('C','major'); 'db minor'->('Db','minor').
+
+    Guards the unpack: a label that isn't exactly '<tonic> <major|minor>' (a changed
+    key_prediction_to_label format) raises DecodeFailed rather than a bare ValueError, so it
+    surfaces as a contract decode error instead of an opaque 'internal'.
+    """
+    parts = str(label).strip().lower().split()
+    if len(parts) != 2 or parts[1] not in ("major", "minor"):
+        from protocol import DecodeFailed
+
+        raise DecodeFailed(
+            f"unexpected madmom key label: {label!r}",
+            hint="madmom's key_prediction_to_label format changed",
+        )
+    name, mode = parts
     tonic = name[0].upper() + name[1:]
     return tonic, mode
 
@@ -112,7 +145,10 @@ def _key(path):
     candidates = []
     for i in order[:3]:
         tonic, mode = _parse_key_label(labels[i])
-        candidates.append({"tonic": tonic, "mode": mode, "confidence": round(float(probs[i]), 6)})
+        # Clamp to [0, 1]: a float32 softmax can edge a hair past 1.0, which allow_nan=False does
+        # NOT catch but validate.ts's unit-interval rule rejects (→ ContractError on a real run).
+        conf = round(float(min(1.0, max(0.0, probs[i]))), 6)
+        candidates.append({"tonic": tonic, "mode": mode, "confidence": conf})
     return candidates[0], candidates
 
 
@@ -126,8 +162,6 @@ def _chords(path):
 
 def analyze(path, on_stage=lambda s: None):
     """Run madmom key + chord recognition and return a contract Analysis dict."""
-    import madmom
-
     on_stage("decode")
     duration = _duration(path)
     if duration <= 0.0:
@@ -151,13 +185,7 @@ def analyze(path, on_stage=lambda s: None):
         "contractVersion": "1.0.0",
         "file": path,
         "durationSec": duration,
-        "engine": {
-            "name": "madmom",
-            "version": madmom.__version__,
-            "license": _LICENSE,
-            "modelVersions": {"chord": "deepchroma-crf", "key": "cnnkey"},
-            "confidenceKind": "posterior",
-        },
+        "engine": engine_block(),
         "engineCapabilities": ["key", "keyCandidates", "chords"],
         "vocabulary": "triads",
         "key": key,
