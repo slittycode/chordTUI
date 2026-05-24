@@ -17,6 +17,7 @@ spelling + roman numerals are derived TS-side in music.ts.
 """
 import os
 import sys
+import tempfile
 import warnings
 
 warnings.filterwarnings("ignore")
@@ -97,7 +98,10 @@ def _btc_lab_lines(path, large_voca):
     model, mean, std, idx_to_chord, config, device = _load_btc(large_voca)
     from utils.mir_eval_modules import audio_file_to_features  # _load_btc put _BTC_DIR on sys.path
 
-    feature, feature_per_second, song_length_second = audio_file_to_features(path, config)
+    # BTC's feature extractor windows in 10 s blocks and leaves `feature` unbound for shorter
+    # clips; pad sub-10 s audio with silence so inference runs (the contract duration stays real).
+    infer_path, real_duration = _ensure_min_length(path, config)
+    feature, feature_per_second, _song_length_second = audio_file_to_features(infer_path, config)
     feature = feature.T
     feature = (feature - mean) / std
     time_unit = feature_per_second
@@ -128,7 +132,28 @@ def _btc_lab_lines(path, large_voca):
                     if start_time != time_unit * (n_timestep * t + i):
                         lines.append("%.3f %.3f %s\n" % (start_time, time_unit * (n_timestep * t + i), idx_to_chord[prev_chord]))
                     break
-    return lines, song_length_second
+    return lines, real_duration
+
+
+def _ensure_min_length(path, config):
+    """Return (path_to_analyze, real_duration_seconds). BTC's feature extractor needs >= inst_len
+    (10 s); for shorter clips, write a silence-padded temp WAV and analyze that instead, while
+    reporting the REAL duration (the gap-free stitch clips the padding back out)."""
+    import librosa
+    import numpy as np
+    import soundfile as sf
+
+    sr = config.mp3["song_hz"]
+    y, _ = librosa.load(path, sr=sr, mono=True)
+    real_duration = round(len(y) / float(sr), 6)
+    min_len = int(config.mp3["inst_len"] * sr) + sr  # inst_len + 1 s margin
+    if len(y) >= min_len:
+        return path, real_duration
+    padded = np.zeros(min_len, dtype=y.dtype)
+    padded[: len(y)] = y
+    tmp = tempfile.mktemp(suffix=".wav")
+    sf.write(tmp, padded, sr)
+    return tmp, real_duration
 
 
 def _display(root, quality):

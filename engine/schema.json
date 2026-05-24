@@ -28,7 +28,7 @@
       "additionalProperties": false,
       "required": ["name", "version", "license", "modelVersions", "confidenceKind"],
       "properties": {
-        "name": { "enum": ["librosa", "madmom", "essentia", "btc"] },
+        "name": { "enum": ["librosa", "essentia", "btc"] },
         "version": { "type": "string" },
         "license": { "type": "string" },
         "modelVersions": {

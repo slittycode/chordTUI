@@ -26,7 +26,7 @@ function fakeDriver(capture: Capture): EngineDriver {
     isMock: true,
     // Mount probe → unavailable, so upgradeAvailable stays false (no second leg to worry about).
     engineInfo: async () => {
-      throw new EngineUnavailableError("no madmom in test");
+      throw new EngineUnavailableError("no btc in test");
     },
     // Never resolves; rejects with EngineAbortError when the run is cancelled.
     analyze: (_engine, _file, { signal }) => {

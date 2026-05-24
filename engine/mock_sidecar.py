@@ -2,7 +2,7 @@
 """Mock analysis sidecar — pure stdlib, no deps.
 
 Speaks the exact contract (engine/schema.json / src/core/types.ts) so the frontend and
-engine.ts can be built and tested before the real librosa/madmom engines exist.
+engine.ts can be built and tested before the real librosa/btc engines exist.
 
 Protocol:
   stdout : exactly ONE JSON object — an Analysis, or {"error": {...}}.
@@ -70,11 +70,11 @@ def chords(with_confidence):
 def engine_info(payload):
     if payload == "full":
         return {
-            "name": "madmom",
-            "version": "0.16.1",
-            "license": "CC-BY-NC-SA-4.0",
-            "modelVersions": {"chord": "deepchroma-crf-v1", "key": "cnnkey-v1"},
-            "confidenceKind": "posterior",
+            "name": "btc",
+            "version": "ismir19",
+            "license": "MIT",
+            "modelVersions": {"chord": "btc-ismir19-large-voca", "key": "chord-krumhansl"},
+            "confidenceKind": "correlation",
         }
     return {
         "name": "librosa",
@@ -97,7 +97,7 @@ def analysis(payload):
             if full
             else ["key", "chords"]
         ),
-        "vocabulary": "triads",
+        "vocabulary": "extended" if full else "triads",
         "key": {"tonic": "C", "mode": "major", "confidence": 0.92 if full else 0.71},
         "keyCandidates": (
             [

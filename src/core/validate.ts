@@ -24,7 +24,7 @@ const CONTRACT_MAJOR_RE = /^1\.\d+\.\d+$/;
 const EPS = 1e-6;
 
 const CONFIDENCE_KINDS: ConfidenceKind[] = ["posterior", "correlation", "heuristic"];
-const ENGINE_NAMES: EngineName[] = ["librosa", "madmom", "essentia", "btc"];
+const ENGINE_NAMES: EngineName[] = ["librosa", "essentia", "btc"];
 const ERROR_KINDS: EngineError["kind"][] = [
   "bad_input",
   "decode_failed",

@@ -41,7 +41,7 @@ afterAll(() => {
 });
 
 test("cacheGet returns null on a miss", () => {
-  expect(cacheGet(FIXTURE, "madmom")).toBeNull();
+  expect(cacheGet(FIXTURE, "btc")).toBeNull();
 });
 
 test("cachePut → cacheGet round-trips; file path reflects the queried path", () => {
@@ -68,9 +68,9 @@ test("analyzeWithCache: the second call is served from cache (broken base never 
 });
 
 test("analyzeWithCache never caches the mock (isMock) or with noCache", async () => {
-  const r = await analyzeWithCache(MOCK, "madmom", FIXTURE, { isMock: true });
+  const r = await analyzeWithCache(MOCK, "btc", FIXTURE, { isMock: true });
   expect(r.kind).toBe("analysis");
-  expect(cacheGet(FIXTURE, "madmom")).toBeNull(); // isMock output not stored
+  expect(cacheGet(FIXTURE, "btc")).toBeNull(); // isMock output not stored
 });
 
 // ── engine-info staleness (Fix 5) ───────────────────────────────────
@@ -78,29 +78,29 @@ test("analyzeWithCache never caches the mock (isMock) or with noCache", async ()
 // modelVersions differ from the cached entry — a stale upgrade is recomputed, not served.
 
 function cachedWith(version: string, modelVersions: Record<string, string>): Analysis {
-  const a = mkAnalysis("madmom");
+  const a = mkAnalysis("btc");
   a.engine.version = version;
   a.engine.modelVersions = modelVersions;
   return a;
 }
 function info(version: string, modelVersions: Record<string, string>): EngineInfo {
-  return { name: "madmom", version, license: "CC-BY-NC-SA-4.0", modelVersions, confidenceKind: "posterior" };
+  return { name: "btc", version, license: "MIT", modelVersions, confidenceKind: "correlation" };
 }
 
 test("cacheGet(expectedEngine): version + modelVersions match → hit", () => {
-  cachePut(FIXTURE, "madmom", cachedWith("0.16.1", { chord: "v1", key: "v1" }));
-  expect(cacheGet(FIXTURE, "madmom", info("0.16.1", { chord: "v1", key: "v1" }))).not.toBeNull();
+  cachePut(FIXTURE, "btc", cachedWith("0.16.1", { chord: "v1", key: "v1" }));
+  expect(cacheGet(FIXTURE, "btc", info("0.16.1", { chord: "v1", key: "v1" }))).not.toBeNull();
 });
 
 test("cacheGet(expectedEngine): version mismatch → null (recompute)", () => {
-  cachePut(FIXTURE, "madmom", cachedWith("0.16.1", { chord: "v1" }));
-  expect(cacheGet(FIXTURE, "madmom", info("0.16.2", { chord: "v1" }))).toBeNull();
+  cachePut(FIXTURE, "btc", cachedWith("0.16.1", { chord: "v1" }));
+  expect(cacheGet(FIXTURE, "btc", info("0.16.2", { chord: "v1" }))).toBeNull();
 });
 
 test("cacheGet(expectedEngine): modelVersions mismatch → null (recompute)", () => {
-  cachePut(FIXTURE, "madmom", cachedWith("0.16.1", { chord: "v1" }));
-  expect(cacheGet(FIXTURE, "madmom", info("0.16.1", { chord: "v2" }))).toBeNull(); // value differs
-  expect(cacheGet(FIXTURE, "madmom", info("0.16.1", { chord: "v1", key: "x" }))).toBeNull(); // extra key
+  cachePut(FIXTURE, "btc", cachedWith("0.16.1", { chord: "v1" }));
+  expect(cacheGet(FIXTURE, "btc", info("0.16.1", { chord: "v2" }))).toBeNull(); // value differs
+  expect(cacheGet(FIXTURE, "btc", info("0.16.1", { chord: "v1", key: "x" }))).toBeNull(); // extra key
 });
 
 test("noCache ignores a present cache entry and re-runs (M-5)", async () => {

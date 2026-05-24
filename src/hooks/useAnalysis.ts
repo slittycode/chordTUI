@@ -1,9 +1,9 @@
 // src/hooks/useAnalysis.ts — the preview→upgrade run-state machine (PLAN.md §6).
 //
 // Two-tier flow: an instant librosa *preview* (caps key+chords), then — in "accurate" mode and
-// only when a better engine is actually available — an *upgrade* to madmom that swaps in the
-// richer result. If the upgrade fails (the live MVP reality: madmom is unimplemented → exit 3),
-// the preview is KEPT. One AbortController owns each user run; aborting walks engine.ts's
+// only when a better engine is actually available — an *upgrade* to btc that swaps in the
+// richer result (extended chords + chord-derived key). If the upgrade fails (btc not installed →
+// exit 3), the preview is KEPT. One AbortController owns each user run; aborting walks engine.ts's
 // SIGTERM→grace→SIGKILL ladder.
 //
 // The state transitions live in a PURE exported reducer (`analysisReducer`) so they can be
@@ -17,7 +17,6 @@ import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "r
 import { EngineAbortError, EngineUnavailableError, runEngineInfo } from "../core/engine";
 import type { RunEngineResult } from "../core/engine";
 import { analyzeWithCache } from "../core/cache";
-import { hasMadmomConsent } from "../core/consent";
 import { resolveEngine } from "../core/engineResolve";
 import type { Analysis, EngineEvent, EngineInfo, EngineInfoResponse, EngineName, EngineStage } from "../core/types";
 
@@ -48,7 +47,7 @@ export interface AnalysisState {
   stage: EngineStage | null;
   /** Set only when the preview leg itself failed (no result to show). */
   error: AnalysisError | null;
-  /** A non-fatal note, e.g. "madmom unavailable — showing librosa preview". */
+  /** A non-fatal note, e.g. "btc unavailable — showing librosa preview". */
   upgradeNote: string | null;
   /** Monotonic id of the active run; the reducer's stale-leg guard compares against this. */
   runId: number;
@@ -81,7 +80,7 @@ function isRunning(phase: AnalysisPhase): boolean {
 }
 
 function upgradeNoteFor(cause: "unavailable" | "engine_error", detail?: string): string {
-  if (cause === "unavailable") return "madmom unavailable — showing librosa preview";
+  if (cause === "unavailable") return "btc unavailable — showing librosa preview";
   return detail
     ? `upgrade failed: ${detail} — showing librosa preview`
     : "upgrade failed — showing librosa preview";
@@ -161,7 +160,7 @@ export function analysisReducer(state: AnalysisState, action: AnalysisAction): A
 export interface DriverRunOpts {
   signal: AbortSignal;
   onEvent?: (e: EngineEvent) => void;
-  /** Installed engine info for the cache staleness check (passed on the madmom upgrade leg). */
+  /** Installed engine info for the cache staleness check (passed on the btc upgrade leg). */
   expectedEngine?: EngineInfo;
 }
 
@@ -197,7 +196,7 @@ export interface UseAnalysis {
   analyze: (file: string, mode?: AnalysisMode) => void;
   cancel: () => void;
   isMock: boolean;
-  /** Whether a better-than-preview engine (madmom) is installed (probed once at mount). */
+  /** Whether a better-than-preview engine (btc) is installed (probed once at mount). */
   upgradeAvailable: boolean;
   mode: AnalysisMode;
   setMode: (m: AnalysisMode) => void;
@@ -214,8 +213,8 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
   const runIdRef = useRef(0);
   const mountedRef = useRef(true);
   const probedRef = useRef(false);
-  // The mount-probe's madmom EngineInfoResponse, kept for the cache staleness check on the
-  // upgrade leg (so a stale cached madmom result is recomputed rather than served).
+  // The mount-probe's btc EngineInfoResponse, kept for the cache staleness check on the
+  // upgrade leg (so a stale cached btc result is recomputed rather than served).
   const probedInfoRef = useRef<EngineInfoResponse | null>(null);
 
   // Probe upgrade availability ONCE (probedRef guards StrictMode's double-invoke so we never
@@ -228,12 +227,11 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
       probedRef.current = true;
       const probeAc = new AbortController();
       driver
-        .engineInfo("madmom", { signal: probeAc.signal })
+        .engineInfo("btc", { signal: probeAc.signal })
         .then((info) => {
-          // Auto-upgrade only when madmom is installed AND the user has accepted its
-          // NonCommercial model licence (PLAN.md §6) — never silently use NC models.
-          if (info.name === "madmom") probedInfoRef.current = info; // for the cache staleness check
-          if (mountedRef.current) setUpgradeAvailable(info.name === "madmom" && hasMadmomConsent());
+          // Auto-upgrade to btc whenever it's installed — it's MIT, so there is no consent gate.
+          if (info.name === "btc") probedInfoRef.current = info; // for the cache staleness check
+          if (mountedRef.current) setUpgradeAvailable(info.name === "btc");
         })
         .catch(() => {
           /* unavailable / aborted — leave upgradeAvailable false */
@@ -276,11 +274,11 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
           return;
         }
 
-        // ── upgrade leg (madmom), only when warranted ──
+        // ── upgrade leg (btc), only when warranted ──
         if (runMode === "fast" || !upgradeAvailable || signal.aborted) return;
         dispatch({ type: "UPGRADE_STARTED", runId: id });
         try {
-          const res = await driver.analyze("madmom", file, {
+          const res = await driver.analyze("btc", file, {
             signal,
             onEvent,
             expectedEngine: probedInfoRef.current ?? undefined,

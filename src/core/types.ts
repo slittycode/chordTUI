@@ -24,7 +24,7 @@ export type EngineCapability =
 
 export type ConfidenceKind = "posterior" | "correlation" | "heuristic";
 
-export type EngineName = "librosa" | "madmom" | "essentia" | "btc";
+export type EngineName = "librosa" | "essentia" | "btc";
 
 export interface EngineInfo {
   name: EngineName;

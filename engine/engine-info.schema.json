@@ -7,7 +7,7 @@
   "additionalProperties": false,
   "required": ["name", "version", "license", "modelVersions", "confidenceKind", "contractVersion", "capabilities"],
   "properties": {
-    "name": { "enum": ["librosa", "madmom", "essentia", "btc"] },
+    "name": { "enum": ["librosa", "essentia", "btc"] },
     "version": { "type": "string" },
     "license": { "type": "string" },
     "modelVersions": { "type": "object", "additionalProperties": { "type": "string" } },

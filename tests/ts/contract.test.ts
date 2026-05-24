@@ -33,8 +33,8 @@ test("sparse payload validates; capabilities are key+chords only; advanced field
 test("full payload validates; rich capabilities and populated advanced fields", () => {
   const { stdout } = runMock(["analyze", "--payload", "full"]);
   const a = validateAnalysis(JSON.parse(stdout));
-  expect(a.engine.name).toBe("madmom");
-  expect(a.engine.confidenceKind).toBe("posterior");
+  expect(a.engine.name).toBe("btc");
+  expect(a.engine.confidenceKind).toBe("correlation");
   expect(a.keyCandidates).not.toBeNull();
   expect(a.keyCandidates!.length).toBe(3);
   expect(a.beats).not.toBeNull();
@@ -75,13 +75,13 @@ test("success scenario: parseEngineOutput discriminates to an analysis", () => {
   const { stdout } = runMock(["analyze", "--payload", "full"]);
   const parsed = parseEngineOutput(JSON.parse(stdout));
   expect(parsed.kind).toBe("analysis");
-  if (parsed.kind === "analysis") expect(parsed.value.engine.name).toBe("madmom");
+  if (parsed.kind === "analysis") expect(parsed.value.engine.name).toBe("btc");
 });
 
 test("engine-info round-trips through validateEngineInfo", () => {
   const { stdout } = runMock(["engine-info", "--payload", "full"]);
   const info = validateEngineInfo(JSON.parse(stdout));
-  expect(info.name).toBe("madmom");
+  expect(info.name).toBe("btc");
   expect(info.contractVersion).toMatch(/^1\./);
   expect(info.capabilities).toContain("downbeats");
 });

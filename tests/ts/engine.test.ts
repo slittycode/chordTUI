@@ -43,11 +43,11 @@ test("success (sparse): returns a validated librosa analysis", async () => {
   }
 });
 
-test("success (full): returns the rich madmom analysis", async () => {
+test("success (full): returns the rich btc analysis", async () => {
   const r = await runEngine({ command: mockCmd("analyze", "--payload", "full") });
   expect(r.kind).toBe("analysis");
   if (r.kind === "analysis") {
-    expect(r.value.engine.name).toBe("madmom");
+    expect(r.value.engine.name).toBe("btc");
     expect(r.value.keyCandidates?.length).toBe(3);
     expect(r.value.timeSignature).toBe("4/4");
   }
@@ -187,9 +187,9 @@ test("exit 3 with no stdout → EngineUnavailableError", async () => {
 test("exit 3 with an { error } envelope → EngineUnavailableError carrying the detail", async () => {
   const code =
     "import sys,json;" +
-    "sys.stdout.write(json.dumps({'error':{'kind':'engine_unavailable','detail':'madmom not installed','hint':'run chord setup'}}));" +
+    "sys.stdout.write(json.dumps({'error':{'kind':'engine_unavailable','detail':'btc not installed','hint':'run chord setup'}}));" +
     "sys.exit(3)";
-  await expect(runEngine({ command: py(code) })).rejects.toThrow(/madmom not installed/);
+  await expect(runEngine({ command: py(code) })).rejects.toThrow(/btc not installed/);
 });
 
 // ── process-level guards ────────────────────────────────────────────

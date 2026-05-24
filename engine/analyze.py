@@ -33,18 +33,17 @@ from protocol import (  # noqa: E402
     write_result,
 )
 
-# engine name -> its analysis module. librosa ships in the clean core; madmom and btc ship
-# modules but are usable only when their heavy package is also installed (registry-gated, NOT
-# import-gated: the module existing on disk is necessary but not sufficient).
+# engine name -> its analysis module. librosa ships in the clean core; btc ships a module but is
+# usable only when torch is also installed (registry-gated, NOT import-gated: the module existing
+# on disk is necessary but not sufficient).
 ENGINE_MODULES = {
     "librosa": "engines.librosa_engine",
-    "madmom": "engines.madmom_engine",
     "btc": "engines.btc_engine",
 }
 
-# Opt-in engines gate on a third-party package being importable: the engine name equals its
-# package for madmom; btc gates on torch (its vendored model code ships in-repo).
-_ENGINE_PACKAGE = {"madmom": "madmom", "btc": "torch"}
+# Opt-in engines gate on a third-party package being importable: btc gates on torch (its vendored
+# BTC-ISMIR19 model code ships in-repo under engine/vendor/btc).
+_ENGINE_PACKAGE = {"btc": "torch"}
 
 
 def is_available(engine):
@@ -72,7 +71,7 @@ class _ContractArgumentParser(argparse.ArgumentParser):
 
 def _parse_args(argv):
     p = _ContractArgumentParser(prog="analyze.py")
-    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia", "btc"])
+    p.add_argument("--engine", default="librosa", choices=["librosa", "essentia", "btc"])
     p.add_argument("--file", required=True)
     p.add_argument("--vocabulary", default="triads")  # accepted; triads-only at MVP
     p.add_argument("--json", action="store_true")  # stdout is always JSON; flag is a no-op

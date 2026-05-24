@@ -2,7 +2,7 @@
 """Per-engine self-test — proves an engine can RUN, not merely import (for `chord doctor`).
 
 Usage:
-  selftest.py --engine librosa|madmom|essentia
+  selftest.py --engine librosa|btc|essentia
 
 Synthesizes a tiny I-IV-V-I C-major WAV (numpy/scipy are clean-core, so this works before any
 engine loads), imports the engine's module and runs its real analyze() on that WAV, then prints
@@ -19,7 +19,6 @@ is picked up here automatically.
 """
 import argparse
 import importlib
-import importlib.util
 import json
 import sys
 import tempfile
@@ -27,7 +26,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-from analyze import ENGINE_MODULES  # noqa: E402 — share the one engine registry
+from analyze import ENGINE_MODULES, is_available  # noqa: E402 — share the one engine registry
 
 SR = 44100
 
@@ -64,12 +63,12 @@ def _selftest(engine):
     if module_name is None:
         return {"engine": engine, "installed": False, "working": False,
                 "detail": "no engine module (deferred)"}
-    # The engine module exists on disk; its third-party package (e.g. madmom) must be importable
-    # too. madmom_engine imports madmom lazily, so checking the module alone would lie — probe the
-    # package spec. The package name equals the engine name for librosa/madmom.
-    if importlib.util.find_spec(engine) is None:
+    # The engine module exists on disk; its heavy third-party package must be importable too
+    # (btc lazily imports torch, so checking the module alone would lie). is_available() applies
+    # the same registry+package gating analyze.py uses (btc → torch).
+    if not is_available(engine):
         return {"engine": engine, "installed": False, "working": False,
-                "detail": f"{engine} package not installed"}
+                "detail": f"{engine} not installed"}
 
     wav = tempfile.mktemp(suffix=".wav")
     try:
@@ -86,7 +85,7 @@ def _selftest(engine):
 
 def main(argv):
     p = argparse.ArgumentParser(prog="selftest.py")
-    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia"])
+    p.add_argument("--engine", default="librosa", choices=["librosa", "essentia", "btc"])
     args = p.parse_args(argv)
     sys.stdout.write(json.dumps(_selftest(args.engine)) + "\n")
     return 0
