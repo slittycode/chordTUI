@@ -1,7 +1,7 @@
 // ProgressionPanel — the chord progression as a compact "label (roman) → …" line (roman numerals
-// are in-key-only, computed TS-side; out-of-key chords get no numeral). Also the home of the
-// always-disabled "extended chords" affordance: rendered as a plain text line (not a control), so
-// the honest "triads only at MVP" limitation is visible without pretending it's toggleable.
+// are in-key-only, computed TS-side; out-of-key chords get no numeral). The "extended chords"
+// line reflects the analysis's actual vocabulary: "on" with the btc engine (7ths/sus/etc.), "off"
+// when an engine only produced triads — stated honestly, never faked.
 
 import type { Analysis } from "../core/types";
 import { collapseProgression, formatChordLabel, romanNumeral } from "../core/music";
@@ -14,6 +14,7 @@ export function ProgressionPanel({ analysis }: { analysis: Analysis }) {
     return rn ? `${label} (${rn})` : label;
   });
   const body = cells.length ? cells.join("  →  ") : "(none)";
+  const extendedOn = analysis.vocabulary === "extended";
 
   return (
     <box
@@ -26,8 +27,9 @@ export function ProgressionPanel({ analysis }: { analysis: Analysis }) {
     >
       <text fg={C.fg}>{body}</text>
       <text fg={C.dim}>
-        extended chords: off — triads only at this version; extended chords need a model that isn't
-        wired up yet.
+        {extendedOn
+          ? `extended chords: on — 7ths/sus/etc. via ${analysis.engine.name}`
+          : "extended chords: off — triads only (install the btc engine for 7ths)"}
       </text>
     </box>
   );
