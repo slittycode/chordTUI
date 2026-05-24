@@ -47,5 +47,5 @@ jobs:
       - name: Run Python tests
         run: uv run --project engine pytest
 
-      - name: Lint Python engine
-        run: uv run --project engine ruff check engine/
+      - name: Lint Python engine and tests
+        run: uv run --project engine ruff check engine tests/py

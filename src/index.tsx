@@ -27,16 +27,19 @@ const ENGINE_NAMES: readonly string[] = ["librosa", "madmom", "essentia"];
 const HELP = `chord — terminal chord / key / progression detector (contract v${CURRENT_CONTRACT_VERSION})
 
 Usage:
-  chord analyze <file> [--engine librosa|madmom|essentia] [--json]
+  chord analyze <file> [--engine librosa|madmom|essentia] [--json] [--no-cache]
                          analyze an audio file (key + chords + progression)
   chord engine-info [--engine X] [--json]
                          print the engine's capabilities / versions
-  chord doctor           report engine / python / ffmpeg / librosa / madmom status
-  chord setup            install the analysis engine (not yet implemented)
+  chord doctor           per-engine table: installed / working (ran on a WAV) / license / default
+  chord setup [--engine librosa|madmom|essentia] [--no-madmom] [--accept-noncommercial]
+                         install the clean librosa core; with consent, also install madmom
   chord                  launch the interactive TUI
   chord --help           show this help
 
 Notes:
+  • Without --engine, analyze uses madmom when installed AND consented, else librosa.
+  • Results are cached per audio file + engine; re-runs are instant (--no-cache to skip).
   • With no real engine installed, analyze uses a bundled MOCK (sample data) only in an
     interactive terminal; piped / --json output refuses (run \`chord setup\`).`;
 
@@ -44,6 +47,7 @@ interface ParsedFlags {
   positionals: string[];
   engine?: string;
   json: boolean;
+  noCache: boolean;
   unknownFlag?: string;
 }
 
@@ -52,12 +56,15 @@ function parseFlags(args: string[]): ParsedFlags {
   const positionals: string[] = [];
   let engine: string | undefined;
   let json = false;
+  let noCache = false;
   let unknownFlag: string | undefined;
   for (let i = 0; i < args.length; i++) {
     const a = args[i];
     if (a === undefined) continue;
     if (a === "--json") {
       json = true;
+    } else if (a === "--no-cache") {
+      noCache = true;
     } else if (a === "--engine") {
       i += 1;
       engine = args[i]; // may be undefined; validated by the caller
@@ -67,7 +74,7 @@ function parseFlags(args: string[]): ParsedFlags {
       positionals.push(a);
     }
   }
-  return { positionals, engine, json, unknownFlag };
+  return { positionals, engine, json, noCache, unknownFlag };
 }
 
 /** Returns the validated engine, or null if invalid (message already written). */
@@ -113,13 +120,13 @@ async function main(): Promise<number> {
       const file = f.positionals[0];
       if (!file) {
         process.stderr.write(
-          "Usage: chord analyze <file> [--engine librosa|madmom|essentia] [--json]\n",
+          "Usage: chord analyze <file> [--engine librosa|madmom|essentia] [--json] [--no-cache]\n",
         );
         return 2;
       }
       const engine = checkEngine(f.engine);
       if (engine === null) return 2;
-      return cmdAnalyze({ file, engine, json: f.json });
+      return cmdAnalyze({ file, engine, json: f.json, noCache: f.noCache });
     }
 
     case "engine-info": {
@@ -137,7 +144,7 @@ async function main(): Promise<number> {
       return cmdDoctor({});
 
     case "setup":
-      return cmdSetup({});
+      return cmdSetup({ argv: rest, isTTY: process.stdout.isTTY === true });
 
     default:
       process.stderr.write(`Unknown command: "${command}"\nRun "chord --help".\n`);

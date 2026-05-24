@@ -300,8 +300,10 @@ preview/fallback runs end-to-end; ④ license + repo decided.
 **Phase 1 — Engine (librosa-first) ∥ Phase 2 — Frontend (mock-first)** — run in
 parallel against the frozen contract.
 > **Status:** Phase 1 librosa tier ✅ landed; Phase 2 frontend ✅ landed (`engine.ts`,
-> `engineResolve.ts`, `music.ts`, `panels.ts`, `useAnalysis`, the `App` + panels — branch
-> `feat/interactive-tui`). Still open: `cache.ts`, the opt-in `madmom`/`essentia` engine modules.
+> `engineResolve.ts`, `music.ts`, `panels.ts`, `useAnalysis`, the `App` + panels). `cache.ts`
+> ✅ landed (per-engine, `analyzeWithCache`) and the `madmom_engine.py` module ✅ landed (opt-in;
+> caps `["key","keyCandidates","chords"]`). Still open: the **essentia** module, the madmom
+> **install** (NC, fragile — `chord setup` + the recipe), and real extended chords.
 - *Engine:* `engines/librosa_engine.py` (caps `["key","chords"]`), `engine_info.py`,
   then `madmom_engine.py` (opt-in; adds keyCandidates/beats/downbeats; **no mypy**),
   `essentia_engine.py` (opt-in); pytest + ruff.
@@ -316,6 +318,13 @@ parallel against the frozen contract.
 accuracy gate (librosa blocking, madmom nightly, essentia smoke); `chord doctor` table
 (INSTALLED / WORKING=ran-a-processor-on-a-WAV / LICENSE / DEFAULT); promote
 `incubation/` → `active/`; update registry.
+> **Status:** ✅ mostly landed. Real engines wired through CLI + TUI (best-available pick gated
+> on install + NC consent); the **accuracy gate** is built — librosa **blocking** (key ≥ 0.75 /
+> chord ≥ 0.55, `tests/py/test_accuracy.py`), madmom **skip-guarded** (key ≥ 0.85 / chord ≥ 0.70,
+> `test_accuracy_madmom.py`, the manual/nightly check); `chord doctor` prints the per-engine
+> table; results cache; quit reaps the child (no orphan). Incidental: librosa silence is now
+> detected from raw RMS (the chroma-norm check was dead under `chroma_cqt(norm=inf)`). Still open:
+> the madmom **install** itself, essentia, and the `incubation/`→`active/` promotion + registry.
 
 **Phase 4a — Real extended chords + polish.** Triads-only stays MVP; extended toggle
 is **disabled** until backed by a real model (Chordino/NNLS or torch ACR; **deferred

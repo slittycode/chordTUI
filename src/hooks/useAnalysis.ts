@@ -14,10 +14,12 @@
 
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 
-import { EngineAbortError, EngineUnavailableError, runEngine, runEngineInfo } from "../core/engine";
+import { EngineAbortError, EngineUnavailableError, runEngineInfo } from "../core/engine";
 import type { RunEngineResult } from "../core/engine";
+import { analyzeWithCache } from "../core/cache";
+import { hasMadmomConsent } from "../core/consent";
 import { resolveEngine } from "../core/engineResolve";
-import type { Analysis, EngineEvent, EngineInfoResponse, EngineName, EngineStage } from "../core/types";
+import type { Analysis, EngineEvent, EngineInfo, EngineInfoResponse, EngineName, EngineStage } from "../core/types";
 
 export type AnalysisMode = "fast" | "accurate";
 
@@ -159,6 +161,8 @@ export function analysisReducer(state: AnalysisState, action: AnalysisAction): A
 export interface DriverRunOpts {
   signal: AbortSignal;
   onEvent?: (e: EngineEvent) => void;
+  /** Installed engine info for the cache staleness check (passed on the madmom upgrade leg). */
+  expectedEngine?: EngineInfo;
 }
 
 export interface EngineDriver {
@@ -171,11 +175,12 @@ export function makeDefaultDriver(): EngineDriver {
   const r = resolveEngine();
   return {
     isMock: r.isMock,
-    analyze: (engine, file, { signal, onEvent }) =>
-      runEngine({
-        command: [...r.analyzeBase, "--file", file, "--json", "--engine", engine],
+    analyze: (engine, file, { signal, onEvent, expectedEngine }) =>
+      analyzeWithCache(r.analyzeBase, engine, file, {
+        isMock: r.isMock,
         signal,
         onEvent,
+        expectedEngine,
       }),
     engineInfo: (engine, { signal }) =>
       runEngineInfo({ command: [...r.engineInfoBase, "--engine", engine], signal }),
@@ -209,6 +214,9 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
   const runIdRef = useRef(0);
   const mountedRef = useRef(true);
   const probedRef = useRef(false);
+  // The mount-probe's madmom EngineInfoResponse, kept for the cache staleness check on the
+  // upgrade leg (so a stale cached madmom result is recomputed rather than served).
+  const probedInfoRef = useRef<EngineInfoResponse | null>(null);
 
   // Probe upgrade availability ONCE (probedRef guards StrictMode's double-invoke so we never
   // spawn the probe twice). The probe is a cheap engine-info call that exits on its own, so we
@@ -222,7 +230,10 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
       driver
         .engineInfo("madmom", { signal: probeAc.signal })
         .then((info) => {
-          if (mountedRef.current) setUpgradeAvailable(info.name === "madmom");
+          // Auto-upgrade only when madmom is installed AND the user has accepted its
+          // NonCommercial model licence (PLAN.md §6) — never silently use NC models.
+          if (info.name === "madmom") probedInfoRef.current = info; // for the cache staleness check
+          if (mountedRef.current) setUpgradeAvailable(info.name === "madmom" && hasMadmomConsent());
         })
         .catch(() => {
           /* unavailable / aborted — leave upgradeAvailable false */
@@ -269,7 +280,11 @@ export function useAnalysis(injectedDriver?: EngineDriver): UseAnalysis {
         if (runMode === "fast" || !upgradeAvailable || signal.aborted) return;
         dispatch({ type: "UPGRADE_STARTED", runId: id });
         try {
-          const res = await driver.analyze("madmom", file, { signal, onEvent });
+          const res = await driver.analyze("madmom", file, {
+            signal,
+            onEvent,
+            expectedEngine: probedInfoRef.current ?? undefined,
+          });
           if (res.kind === "error") {
             dispatch({ type: "UPGRADE_FAILED", runId: id, cause: "engine_error", detail: res.value.detail });
             return;

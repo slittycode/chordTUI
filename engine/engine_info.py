@@ -7,8 +7,8 @@ frontend can build cache keys and discover capabilities without a full analysis.
 Usage:
   engine_info.py --engine librosa|madmom|essentia [--json]
 
-  exit 0 + EngineInfoResponse on stdout for an implemented engine; exit 3 + an
-  engine_unavailable envelope for one that is not yet implemented.
+  exit 0 + EngineInfoResponse on stdout for an available engine; exit 3 + an
+  engine_unavailable envelope for one that is not installed.
 """
 import argparse
 import sys
@@ -16,6 +16,7 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
+from analyze import is_available  # noqa: E402 — share the one registry-availability check
 from protocol import (  # noqa: E402
     CONTRACT_VERSION,
     ERROR_KIND_EXIT,
@@ -25,8 +26,6 @@ from protocol import (  # noqa: E402
     error_envelope,
     write_result,
 )
-
-IMPLEMENTED = {"librosa"}
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):
@@ -49,6 +48,21 @@ def _librosa_info():
     }
 
 
+def _madmom_info():
+    # Reuse the engine's own block so engine-info and analyze report IDENTICAL version +
+    # modelVersions (the cache staleness check in cache.ts depends on this).
+    from engines.madmom_engine import engine_block
+
+    return {
+        **engine_block(),
+        "contractVersion": CONTRACT_VERSION,
+        "capabilities": ["key", "keyCandidates", "chords"],
+    }
+
+
+_INFO = {"librosa": _librosa_info, "madmom": _madmom_info}
+
+
 def run(argv):
     p = _ContractArgumentParser(prog="engine_info.py")
     p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia"])
@@ -56,12 +70,12 @@ def run(argv):
     args = p.parse_args(argv)
 
     try:
-        if args.engine not in IMPLEMENTED:
+        if not is_available(args.engine):
             raise EngineUnavailable(
-                f"engine '{args.engine}' is not available yet",
+                f"engine '{args.engine}' is not available",
                 hint="run `chord setup` or use --engine librosa",
             )
-        write_result(_librosa_info())
+        write_result(_INFO[args.engine]())
         return EXIT["ok"]
     except EngineFailure as e:
         write_result(error_envelope(e.kind, e.detail, e.hint))

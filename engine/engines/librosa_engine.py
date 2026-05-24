@@ -20,6 +20,7 @@ import librosa  # noqa: E402
 from protocol import DecodeFailed  # noqa: E402
 
 SR = 22050  # downsample target; well above the harmonic range we analyze, fast chroma
+HOP = 512  # one hop length shared by chroma, RMS, and frame→time so the frame grids align
 PITCH_CLASSES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
 
 # Krumhansl-Kessler key profiles (major, minor), indexed from the tonic.
@@ -29,8 +30,11 @@ _KS_MINOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69
 # Binary triad templates: a major triad on root r lights {r, r+4, r+7}; minor {r, r+3, r+7}.
 _TRIAD_INTERVALS = {"maj": (0, 4, 7), "min": (0, 3, 7)}
 
-# A frame whose chroma L2 norm falls below this is treated as no-chord ("N").
-_SILENCE_NORM = 1e-3
+# No-chord ("N") is gated on raw-signal RMS, not chroma: chroma_cqt normalizes every frame to
+# unit max, so a silent frame's chroma looks like a full chord (CQT ringing from neighbouring
+# chords + that normalization). RMS of the source audio is genuinely ~0 in silence, so it is the
+# honest silence signal. A frame whose RMS is below this (audio peak-normalized to 0.9) is N.
+_SILENCE_RMS = 1e-2
 
 # Chord runs shorter than this many frames are boundary flicker (e.g. a 1-frame transient
 # at a chord change) and get absorbed into the preceding run. ~5 frames ≈ 0.1 s at the
@@ -91,15 +95,17 @@ def _frame_labels(chroma):
     """Per-frame (label_index, score): index 0..23 -> a triad, -1 -> N (no-chord).
 
     Cosine similarity of two non-negative vectors is in [0, 1] by construction, so the
-    per-frame score is a valid confidence with no clamping needed.
+    per-frame score is a valid confidence with no clamping needed. A numerically-zero chroma
+    frame (norm ~0) can't be cosine-compared (0/0); it is left as N. Real silence is detected
+    upstream from the audio RMS — see analyze().
     """
     norms = np.linalg.norm(chroma, axis=0)
     n = chroma.shape[1]
     idx = np.full(n, -1, dtype=int)
     score = np.zeros(n)
     for f in range(n):
-        if norms[f] < _SILENCE_NORM:
-            continue  # leave as N
+        if norms[f] < 1e-9:
+            continue  # numerically silent chroma -> leave as N (avoid 0/0)
         sims = (_TEMPLATES @ chroma[:, f]) / norms[f]  # templates already unit-norm
         best = int(np.argmax(sims))
         idx[f] = best
@@ -176,16 +182,24 @@ def analyze(path, on_stage=lambda s: None):
         raise DecodeFailed("audio is empty (zero duration)", hint="the file contains no audio")
 
     on_stage("features")
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr)
+    chroma = librosa.feature.chroma_cqt(y=y, sr=sr, hop_length=HOP)
     # Temporal median filter denoises chroma frame-to-frame (de-flickers the chord track)
     # without the artifacts of median-filtering categorical labels directly.
     chroma = median_filter(chroma, size=(1, 9))
-    times = librosa.frames_to_time(np.arange(chroma.shape[1]), sr=sr)
+    times = librosa.frames_to_time(np.arange(chroma.shape[1]), sr=sr, hop_length=HOP)
+    # Per-frame loudness on the SAME frame grid, used to mark genuine silence as N.
+    rms = librosa.feature.rms(y=y, hop_length=HOP)[0]
 
     on_stage("beat-track")  # coarse pipeline marker; librosa exposes no beats
 
     on_stage("chord-decode")
     idx, score = _frame_labels(chroma)
+    # Override to N where the source audio is silent (rms ~0). Aligned defensively by length:
+    # rms/chroma frame counts can differ by one depending on centering.
+    m = min(idx.size, rms.size)
+    silent = rms[:m] < _SILENCE_RMS
+    idx[:m][silent] = -1
+    score[:m][silent] = 0.0
     idx = _despeckle(idx, _MIN_RUN_FRAMES)
     chords = _segments(idx, score, times, duration)
 

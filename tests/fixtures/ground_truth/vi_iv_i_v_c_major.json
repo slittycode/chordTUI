@@ -1,0 +1,52 @@
+{
+  "audio": "vi_iv_i_v_c_major.wav",
+  "durationSec": 9.6,
+  "key": {
+    "tonic": "C",
+    "mode": "major"
+  },
+  "segments": [
+    {
+      "start": 0.0,
+      "end": 1.6,
+      "root": "A",
+      "quality": "maj",
+      "label": "A"
+    },
+    {
+      "start": 1.6,
+      "end": 3.2,
+      "root": "F",
+      "quality": "maj",
+      "label": "F"
+    },
+    {
+      "start": 3.2,
+      "end": 6.4,
+      "root": "C",
+      "quality": "maj",
+      "label": "C"
+    },
+    {
+      "start": 6.4,
+      "end": 8.0,
+      "root": "G",
+      "quality": "maj",
+      "label": "G"
+    },
+    {
+      "start": 8.0,
+      "end": 9.6,
+      "root": "C",
+      "quality": "maj",
+      "label": "C"
+    }
+  ],
+  "expectedRomanNumerals": [
+    "vi",
+    "IV",
+    "I",
+    "V",
+    "I"
+  ]
+}
