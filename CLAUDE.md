@@ -131,13 +131,19 @@ The plan describes the full system; the repo is partway through it. Notably:
    (`tests/fixtures/` CC0 WAVs, `tests/py/accuracy.py` + `test_accuracy.py`, blocking on librosa;
    `test_accuracy_madmom.py` skip-guarded).
 2. **Not built yet** (don't go hunting for these): the **essentia** engine module doesn't exist
-   (`analyze.py` returns `engine_unavailable` for it). The **madmom module exists but is not
-   installed** by default — it's the (NC, fragile) *install* that's deferred, so madmom returns
-   `engine_unavailable` until `chord setup` (consent) + the manual recipe install it; until then
-   the TUI's accuracy "upgrade" falls back to the librosa preview. Real **extended chords** are
-   still refused (triads only).
+   (`analyze.py` returns `engine_unavailable` for it). The **madmom module is verified** (its
+   key/chord recognizers run end-to-end; `engine/engines/madmom_engine.py` clamps key confidence
+   to `[0,1]` and guards the key-label parse) but is **not installed by default** — its (NC,
+   fragile) package isn't in the clean-core lock, so `chord setup` (with consent) installs it via
+   the validated recipe. Until installed, madmom returns `engine_unavailable` and the TUI's
+   accuracy "upgrade" falls back to the librosa preview. Real **extended chords** are still
+   refused (triads only).
 3. **Behavior to know:** `resolveEngine` lives in `src/core/engineResolve.ts` (shared by the CLI
    and the hook). Results **are** cached now — per `(sha256(file), engine)` via `analyzeWithCache`
-   (`src/core/cache.ts`), so a re-run is instant; never cached for the mock. `chord setup` records
-   madmom NC consent + prints the install recipe (no longer a placeholder); the CLI default engine
+   (`src/core/cache.ts`), so a re-run is instant; never cached for the mock; a cached madmom entry
+   is also invalidated when the installed engine's version/`modelVersions` change. `chord setup`
+   **installs** the clean librosa core (`uv sync`) and, with consent (`--accept-noncommercial` or
+   an interactive yes), madmom — it is no longer a placeholder and no longer just prints a recipe.
+   `chord doctor` shows a per-engine table whose **working** column means a processor actually ran
+   on a test WAV (`engine/selftest.py`), not just that the package imports. The CLI default engine
    and the TUI auto-upgrade pick madmom only when installed **and** consented, else librosa.

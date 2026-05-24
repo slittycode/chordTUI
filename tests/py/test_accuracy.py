@@ -58,7 +58,7 @@ def test_librosa_accuracy_gate(capsys):
     chord_acc = total_correct / total_dur
 
     with capsys.disabled():
-        print("\nlibrosa accuracy gate (clean synthetic sines):")
+        print("\nlibrosa accuracy gate (synthetic harmonic triads):")
         for name, kc, cs in rows:
             print(f"  {name:24s} key={'ok' if kc else 'MISS':4s} chord={cs:.3f}")
         print(f"  AGGREGATE  key={key_acc:.3f} (floor {KEY_FLOOR})  "

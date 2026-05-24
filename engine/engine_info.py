@@ -49,14 +49,12 @@ def _librosa_info():
 
 
 def _madmom_info():
-    import madmom
+    # Reuse the engine's own block so engine-info and analyze report IDENTICAL version +
+    # modelVersions (the cache staleness check in cache.ts depends on this).
+    from engines.madmom_engine import engine_block
 
     return {
-        "name": "madmom",
-        "version": madmom.__version__,
-        "license": "CC-BY-NC-SA-4.0",
-        "modelVersions": {"chord": "deepchroma-crf", "key": "cnnkey"},
-        "confidenceKind": "posterior",
+        **engine_block(),
         "contractVersion": CONTRACT_VERSION,
         "capabilities": ["key", "keyCandidates", "chords"],
     }

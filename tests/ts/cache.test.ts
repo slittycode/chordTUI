@@ -12,7 +12,7 @@ const CACHE = mkdtempSync(join(tmpdir(), "chordtui-cache-"));
 process.env["CHORDTUI_CACHE_DIR"] = CACHE;
 
 const { cacheGet, cachePut, analyzeWithCache } = await import("../../src/core/cache");
-import type { Analysis, EngineName } from "../../src/core/types";
+import type { Analysis, EngineInfo, EngineName } from "../../src/core/types";
 
 const FIXTURE = "tests/fixtures/audio/i_iv_v_i_c_major.wav";
 const MOCK = ["python3", "engine/mock_sidecar.py", "analyze"];
@@ -71,4 +71,45 @@ test("analyzeWithCache never caches the mock (isMock) or with noCache", async ()
   const r = await analyzeWithCache(MOCK, "madmom", FIXTURE, { isMock: true });
   expect(r.kind).toBe("analysis");
   expect(cacheGet(FIXTURE, "madmom")).toBeNull(); // isMock output not stored
+});
+
+// ── engine-info staleness (Fix 5) ───────────────────────────────────
+// cacheGet(file, engine, expectedEngine) also invalidates when the installed engine's version or
+// modelVersions differ from the cached entry — a stale upgrade is recomputed, not served.
+
+function cachedWith(version: string, modelVersions: Record<string, string>): Analysis {
+  const a = mkAnalysis("madmom");
+  a.engine.version = version;
+  a.engine.modelVersions = modelVersions;
+  return a;
+}
+function info(version: string, modelVersions: Record<string, string>): EngineInfo {
+  return { name: "madmom", version, license: "CC-BY-NC-SA-4.0", modelVersions, confidenceKind: "posterior" };
+}
+
+test("cacheGet(expectedEngine): version + modelVersions match → hit", () => {
+  cachePut(FIXTURE, "madmom", cachedWith("0.16.1", { chord: "v1", key: "v1" }));
+  expect(cacheGet(FIXTURE, "madmom", info("0.16.1", { chord: "v1", key: "v1" }))).not.toBeNull();
+});
+
+test("cacheGet(expectedEngine): version mismatch → null (recompute)", () => {
+  cachePut(FIXTURE, "madmom", cachedWith("0.16.1", { chord: "v1" }));
+  expect(cacheGet(FIXTURE, "madmom", info("0.16.2", { chord: "v1" }))).toBeNull();
+});
+
+test("cacheGet(expectedEngine): modelVersions mismatch → null (recompute)", () => {
+  cachePut(FIXTURE, "madmom", cachedWith("0.16.1", { chord: "v1" }));
+  expect(cacheGet(FIXTURE, "madmom", info("0.16.1", { chord: "v2" }))).toBeNull(); // value differs
+  expect(cacheGet(FIXTURE, "madmom", info("0.16.1", { chord: "v1", key: "x" }))).toBeNull(); // extra key
+});
+
+test("noCache ignores a present cache entry and re-runs (M-5)", async () => {
+  // Seed a sentinel a cache *hit* would return verbatim; the mock can never emit this version.
+  const sentinel = mkAnalysis("librosa");
+  sentinel.engine.version = "SENTINEL";
+  cachePut(FIXTURE, "librosa", sentinel);
+  expect(cacheGet(FIXTURE, "librosa")!.engine.version).toBe("SENTINEL"); // entry present
+  const r = await analyzeWithCache(MOCK, "librosa", FIXTURE, { isMock: false, noCache: true });
+  expect(r.kind).toBe("analysis");
+  if (r.kind === "analysis") expect(r.value.engine.version).not.toBe("SENTINEL"); // re-ran, bypassed cache
 });

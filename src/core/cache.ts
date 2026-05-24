@@ -17,7 +17,7 @@ import { join } from "node:path";
 
 import { runEngine } from "./engine";
 import type { RunEngineResult } from "./engine";
-import type { Analysis, EngineEvent, EngineName } from "./types";
+import type { Analysis, EngineEvent, EngineInfo, EngineName } from "./types";
 import { validateAnalysis } from "./validate";
 
 function cacheDir(): string {
@@ -33,12 +33,37 @@ function entryPath(file: string, engine: EngineName): string {
   return join(cacheDir(), `${fileHash(file)}__${engine}.json`);
 }
 
-/** Return a cached, re-validated Analysis for (file, engine), or null on any miss/error. */
-export function cacheGet(file: string, engine: EngineName): Analysis | null {
+/** True iff two modelVersions maps have identical keys and values. */
+function sameModelVersions(a: Record<string, string>, b: Record<string, string>): boolean {
+  const ak = Object.keys(a);
+  if (ak.length !== Object.keys(b).length) return false;
+  return ak.every((k) => a[k] === b[k]);
+}
+
+/**
+ * Return a cached, re-validated Analysis for (file, engine), or null on any miss/error.
+ *
+ * `expectedEngine` (when supplied) adds a staleness check: the cached entry's engine.version and
+ * modelVersions must match the currently-installed engine, else the entry is treated as a miss
+ * (recompute). A contract-major match alone isn't enough — an engine upgrade or model swap can
+ * change the output for the same audio. Callers pass it only where they already hold the engine
+ * info (no extra spawn); without it the check is contract-major-only, as before.
+ */
+export function cacheGet(
+  file: string,
+  engine: EngineName,
+  expectedEngine?: EngineInfo,
+): Analysis | null {
   try {
     const path = entryPath(file, engine);
     if (!existsSync(path)) return null;
     const analysis = validateAnalysis(JSON.parse(readFileSync(path, "utf8")));
+    if (expectedEngine) {
+      if (analysis.engine.version !== expectedEngine.version) return null;
+      if (!sameModelVersions(analysis.engine.modelVersions, expectedEngine.modelVersions)) {
+        return null;
+      }
+    }
     // The stored path is whatever ran first; reflect the path actually queried now.
     analysis.file = file;
     return analysis;
@@ -63,6 +88,8 @@ export interface CachedAnalyzeOptions {
   noCache?: boolean;
   /** The resolved sidecar is the bundled mock → never cache its fake output. */
   isMock?: boolean;
+  /** Installed engine info for the cache staleness check (see cacheGet). */
+  expectedEngine?: EngineInfo;
   signal?: AbortSignal;
   onEvent?: (e: EngineEvent) => void;
   timeoutMs?: number;
@@ -81,7 +108,7 @@ export async function analyzeWithCache(
 ): Promise<RunEngineResult> {
   const useCache = !opts.noCache && !opts.isMock;
   if (useCache) {
-    const hit = cacheGet(file, engine);
+    const hit = cacheGet(file, engine, opts.expectedEngine);
     if (hit) return { kind: "analysis", value: hit };
   }
   const command = [...analyzeBase, "--file", file, "--json", "--engine", engine];
