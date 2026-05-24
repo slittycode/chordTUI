@@ -18,7 +18,8 @@ bun test tests/ts/music.test.ts              # one TS test file
 bun test -t "roman numeral"                  # one TS test by name
 bun run typecheck                            # tsc --noEmit (must be clean)
 bun run dev                                   # watch-run src/index.tsx
-bun run src/index.tsx analyze <file.wav>     # run the CLI directly (binary name: `chord`)
+bun run src/index.tsx analyze <file.wav>     # run the CLI directly (bin: `chordtui`, alias `chord`)
+bun link                                      # install `chordtui` (+ `chord`) globally on PATH (~/.bun/bin)
 
 # Python engine — also run from repo root (uv resolves the engine/ project)
 uv run --project engine pytest               # all Python tests (incl. the blocking librosa accuracy gate)

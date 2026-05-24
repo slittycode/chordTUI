@@ -5,10 +5,12 @@
   "type": "module",
   "private": true,
   "bin": {
+    "chordtui": "src/index.tsx",
     "chord": "src/index.tsx"
   },
   "scripts": {
     "dev": "bun run --watch src/index.tsx",
+    "link": "bun link",
     "typecheck": "tsc --noEmit",
     "test": "bun test"
   },
