@@ -1,5 +1,13 @@
 # chordTUI — Key, Chord & Progression Recognition TUI
 
+> **⚠️ SUPERSEDED on the accuracy engine (2026-05-24): madmom → btc.** The accuracy tier is now
+> **btc** (BTC-ISMIR19, **MIT**, vendored in `engine/vendor/btc`), which delivers *extended* chords
+> + chord-derived key and **drops the NonCommercial/consent machinery entirely** — exactly the
+> "future permissive torch ACR model" §2 below anticipated. Everything in this doc about madmom
+> (the NC tier, consent flow, the `--accept-noncommercial` path) is retired. See
+> `docs/probe-matrix.md` §7 (probe) + §8 (GuitarSet: 0.76 chord / 0.84 key) and `CLAUDE.md`. The
+> rest of the design (polyglot contract, capability-gated UI, librosa clean core) stands unchanged.
+
 > **Revised after a 9-agent (3×3) Opus review, then validated by a Phase-0 probe.**
 > There are **two defaults, not one** (this resolves an earlier contradiction in this
 > doc): the **install default is librosa** (ISC, always installs, zero NC/AGPL) — it is

@@ -191,3 +191,21 @@ engine module, no frontend rewrite), in a separate PR. Fallback if a blocker app
 integration: `autochord` (Apache-2.0, ~67%). Enabling extended chords additionally needs the contract
 widened (`vocabulary: "extended"`, quality enum) + roman numerals for 7ths in `music.ts` + the
 currently-disabled UI toggle.
+
+## 8. btc accuracy on GuitarSet (real audio) — ✅ MEASURED (2026-05-24)
+
+After building `btc_engine.py` (and retiring madmom), measured the engine on **GuitarSet**
+(CC-BY 4.0, https://zenodo.org/records/3371780) — 180 `_comp` excerpts of real solo acoustic
+guitar with time-aligned chord + key annotations. Harness: `tools/eval_guitarset.py` (mir_eval
+majmin WCSR for chords; chord-derived key vs `key_mode`), duration-weighted.
+
+**Result** (commit `6965b68`, `engine/.venv-btc`: torch 2.12 / librosa 0.11, py3.11):
+- chord majmin WCSR : **0.760**
+- key accuracy      : **0.844**  (chord-derived; librosa chroma-Krumhansl scored only 0.55 here —
+  hence the engine derives key from BTC's chords, not raw chroma)
+
+**Framing (important):** GuitarSet is *solo acoustic guitar* — **out of domain** for BTC, which was
+trained on pop full-mixes (published ~80.8% MIREX WCSR). So 0.76 is a domain-shifted floor, not a
+regression: the fidelity gate (§7, `tests/py/test_btc_fidelity.py`) proves we reproduce BTC's
+reference byte-for-byte, so the in-domain published number transfers. Reported here *separately*
+from the published figure, not averaged into it.
