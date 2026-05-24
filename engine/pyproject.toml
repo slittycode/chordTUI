@@ -26,6 +26,8 @@ package = false
 
 [tool.ruff]
 line-length = 100
+# Vendored third-party code (BTC-ISMIR19, MIT) is kept verbatim — don't lint it.
+extend-exclude = ["vendor"]
 
 [tool.pytest.ini_options]
 testpaths = ["../tests/py"]

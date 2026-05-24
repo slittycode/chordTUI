@@ -33,10 +33,18 @@ from protocol import (  # noqa: E402
     write_result,
 )
 
-# engine name -> its analysis module. librosa ships in the clean core; madmom ships a module
-# but is usable only when its package is also installed (registry-gated, NOT import-gated:
-# the module existing on disk is necessary but not sufficient).
-ENGINE_MODULES = {"librosa": "engines.librosa_engine", "madmom": "engines.madmom_engine"}
+# engine name -> its analysis module. librosa ships in the clean core; madmom and btc ship
+# modules but are usable only when their heavy package is also installed (registry-gated, NOT
+# import-gated: the module existing on disk is necessary but not sufficient).
+ENGINE_MODULES = {
+    "librosa": "engines.librosa_engine",
+    "madmom": "engines.madmom_engine",
+    "btc": "engines.btc_engine",
+}
+
+# Opt-in engines gate on a third-party package being importable: the engine name equals its
+# package for madmom; btc gates on torch (its vendored model code ships in-repo).
+_ENGINE_PACKAGE = {"madmom": "madmom", "btc": "torch"}
 
 
 def is_available(engine):
@@ -48,7 +56,8 @@ def is_available(engine):
         return True  # clean core, always installed
     if importlib.util.find_spec(module) is None:
         return False
-    return importlib.util.find_spec(engine) is not None  # the underlying library (e.g. madmom)
+    package = _ENGINE_PACKAGE.get(engine, engine)
+    return importlib.util.find_spec(package) is not None  # the heavy lib (madmom / torch)
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):
