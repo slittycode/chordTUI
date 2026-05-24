@@ -28,7 +28,7 @@
       "additionalProperties": false,
       "required": ["name", "version", "license", "modelVersions", "confidenceKind"],
       "properties": {
-        "name": { "enum": ["librosa", "madmom", "essentia"] },
+        "name": { "enum": ["librosa", "essentia", "btc"] },
         "version": { "type": "string" },
         "license": { "type": "string" },
         "modelVersions": {
@@ -53,7 +53,7 @@
       },
       "uniqueItems": true
     },
-    "vocabulary": { "const": "triads" },
+    "vocabulary": { "enum": ["triads", "extended"] },
     "key": { "$ref": "#/$defs/keyResult" },
     "keyCandidates": {
       "oneOf": [{ "type": "null" }, { "type": "array", "items": { "$ref": "#/$defs/keyResult" } }]

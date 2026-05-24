@@ -11,21 +11,26 @@ without changing the UI.
 
 ## What it can and can't do (read this first)
 
-chordTUI reports **triads only** (major/minor) plus a single key. It is honest about uncertainty:
-a feature an engine can't compute is **removed, not faked**, and silence shows as an explicit
-no-chord (`N`) span.
+With the default **btc** engine, chordTUI reports **extended chords** (major/minor **plus 7ths,
+sus, etc.**) over time and a single key, at roughly commercial-grade accuracy. The librosa
+fallback (no install needed) is triads-only. It is honest about uncertainty: a feature an engine
+can't compute is **removed, not faked**, and silence shows as an explicit no-chord (`N`) span.
 
-- It does a good job on clear, familiar pop/rock material with a strong tonal center.
-- It gets weaker on quiet, busy, or ambiguous passages, and **degrades on jazz, classical, and
-  modal music**. Relative major/minor keys (e.g. C major vs A minor) are genuinely hard.
-- The promise is "roughly matches a human on familiar songs," **not 100%**. Sevenths and extended
-  chords are deliberately out of scope at this version.
+- **Accuracy is real, not aspirational.** The btc engine is BTC-ISMIR19, whose published score is
+  ~80.8% MIREX chord WCSR; chordTUI reproduces it byte-for-byte (a fidelity gate guarantees we
+  inherit it). Measured independently on GuitarSet (real audio): **0.76 chord WCSR, 0.84 key
+  accuracy** — and that's *out-of-domain* solo guitar, below its in-domain pop ceiling.
+- It still gets weaker on quiet, busy, or atonal passages; **relative major/minor** (C major vs
+  A minor) is genuinely hard for any system on a short clip. The promise is "roughly matches a
+  human on familiar music," **not 100%**.
+- Without the btc install, the librosa fallback is triads-only (it's a rule-based preview).
 
-## Personal / non-commercial use
+## Licensing — fully permissive
 
-This project assumes **personal, non-commercial** use. That assumption is what makes the optional
-`madmom` accuracy engine usable at all (its models are NonCommercial — see Licenses below). The
-chordTUI code itself is MIT; the default install stays license-clean (librosa only).
+chordTUI is **MIT**, and so is every engine it ships: librosa (ISC clean core) and the accurate
+**btc** tier (BTC-ISMIR19, MIT — code *and* committed weights). There is no NonCommercial tier and
+no consent gate; nothing here restricts commercial use. (An earlier opt-in `madmom` tier carried
+CC-BY-NC-SA NonCommercial models — it has been retired in favour of btc.)
 
 ## Install (from source)
 
@@ -34,33 +39,37 @@ Python engine. From the repository root:
 
 ```sh
 bun install --frozen-lockfile
-uv sync --project engine --locked     # creates engine/.venv with the clean core (librosa)
+bun link                              # installs `chordtui` (+ alias `chord`) on your PATH
+chordtui setup                        # installs librosa (clean core) + btc (the accurate engine)
 ```
 
-The command name is `chord`. While running from source, prefix it with `bun run src/index.tsx`.
+`chordtui setup` installs the librosa clean core (`engine/.venv`) and, by default, the **btc**
+accuracy engine into a separate `engine/.venv-btc` (a one-time PyTorch download; skip with
+`--no-btc`). The command name is `chordtui` (alias `chord`); from source you can also run
+`bun run src/index.tsx`.
 
 ## Use
 
 ```sh
-# One-shot analysis (uses a real engine by default):
-bun run src/index.tsx analyze path/to/song.wav            # human-readable summary
-bun run src/index.tsx analyze path/to/song.wav --json     # the raw Analysis JSON
-bun run src/index.tsx analyze path/to/song.wav --engine librosa   # force an engine
-bun run src/index.tsx analyze path/to/song.wav --no-cache         # skip the result cache
+# One-shot analysis (uses btc by default when installed, else the librosa preview):
+chordtui analyze path/to/song.wav            # human-readable summary
+chordtui analyze path/to/song.wav --json     # the raw Analysis JSON
+chordtui analyze path/to/song.wav --engine librosa   # force an engine
+chordtui analyze path/to/song.wav --no-cache         # skip the result cache
 
 # Diagnostics / info:
-bun run src/index.tsx doctor          # engine / python / ffmpeg / librosa / madmom status
-bun run src/index.tsx engine-info     # the engine's capabilities + versions
-bun run src/index.tsx setup           # report engine state; record madmom consent
+chordtui doctor          # per-engine table: installed / working (ran on a WAV) / license / default
+chordtui engine-info     # the engine's capabilities + versions
+chordtui setup           # install the clean core + btc (the accurate engine)
 
 # Interactive TUI (no arguments):
-bun run src/index.tsx
+chordtui
 ```
 
 In the **TUI**: pick a file to analyze; it shows the instant librosa preview, then upgrades to
-madmom if that engine is installed and consented. Keys: `q` quit · `f` pick another file ·
-`esc` back / cancel a running analysis · `m` toggle fast/accurate mode. Quitting or cancelling
-always stops the Python child — it is never left running.
+btc if that engine is installed. Keys: `q` quit · `f` pick another file · `esc` back / cancel a
+running analysis · `m` toggle fast/accurate mode. Quitting or cancelling always stops the Python
+child — it is never left running.
 
 **Caching:** results are cached per audio file + engine under `~/.cache/chordtui/`, so re-running
 the same file is instant. `--no-cache` bypasses it; replacing the audio invalidates it
@@ -68,35 +77,29 @@ automatically (the key is the file's content hash).
 
 ## Engines, accuracy, and licenses
 
-| Engine | Role | License | Accuracy target |
-|--------|------|---------|-----------------|
-| **librosa** | clean core: instant preview + always-on fallback | ISC | key ≥ 75%, chord ≥ 55% (floor) |
-| **madmom** | opt-in accuracy tier (default once installed + consented) | code BSD, **models CC-BY-NC-SA 4.0 (NonCommercial)** | key ≥ 85%, chord ≥ 70% |
-| **essentia** | reserved opt-in alternative (no engine module yet) | AGPL-3.0 | — |
+| Engine | Role | License | Accuracy |
+|--------|------|---------|----------|
+| **librosa** | clean core: instant preview + always-on fallback | ISC | triads only; rule-based |
+| **btc** | default accuracy tier (extended chords + chord-derived key) | **MIT** (code *and* weights) | ~80.8% MIREX chord WCSR (published); GuitarSet 0.76 chord / 0.84 key |
+| **essentia** | reserved alternative (no engine module yet) | AGPL-3.0 | — |
 
 Be clear-eyed about the trade-off:
 
-- **librosa is reliable and always installs, but weaker.** It uses rule-based key detection
-  (Krumhansl–Schmuckler) and template-matched chroma chords. Its accuracy floor is measured on
-  *clean synthetic sine fixtures* (`tests/fixtures/`) — that proves the engine runs and is broadly
-  correct on a representative progression set; it is **not** a measurement of real-recording
-  accuracy.
-- **madmom is more accurate but NonCommercial and install-fragile.** It uses deep-chroma chord
-  recognition + a CNN key model — markedly better on real recordings — but its pretrained models
-  are CC-BY-NC-SA, and the 2018 package is fragile to install (pinned Python 3.9 / numpy<1.24).
-  It is **not** installed by default and is **not** in the lockfile. Install it explicitly:
+- **librosa is reliable and always installs, but weaker.** Rule-based key (Krumhansl–Schmuckler)
+  + template-matched chroma chords, triads only. Its floor is measured on *synthetic fixtures*
+  (`tests/fixtures/`) — it proves the engine runs, not real-recording accuracy. It's the instant
+  preview and the fallback when btc isn't installed.
+- **btc is the accurate default — and fully permissive.** It is BTC-ISMIR19, a bi-directional
+  transformer (MIT, with committed weights), vendored in-repo at `engine/vendor/btc` and installed
+  by `chordtui setup` into a separate `engine/.venv-btc` (PyTorch, Python 3.11 — kept out of the
+  clean-core lock). chordTUI reproduces BTC's reference inference **byte-for-byte** (a fidelity
+  gate, `tests/py/test_btc_fidelity.py`), so it inherits the published ~80.8% MIREX WCSR rather
+  than claiming a number. Independently measured on **GuitarSet** (real, CC-BY audio): **0.76 chord
+  WCSR, 0.84 key accuracy** — on *out-of-domain* solo guitar, so below its in-domain pop ceiling.
+  Reproduce with `tools/eval_guitarset.py`; details in `docs/probe-matrix.md §7`.
 
-  ```sh
-  bun run src/index.tsx setup --accept-noncommercial   # record the NonCommercial consent
-  # then, the validated macOS-arm64 recipe (also in docs/probe-matrix.md):
-  uv venv --python 3.9 engine/.venv
-  uv pip install --python engine/.venv "cython<3" "numpy<1.24" "scipy<1.13" \
-       "setuptools<60" wheel pip librosa soundfile
-  uv pip install --python engine/.venv --no-build-isolation "madmom==0.16.1"
-  ```
-
-  Once madmom is installed **and** consented, it becomes the default for the final result; the CLI
-  and TUI fall back to librosa whenever it isn't.
+  Once btc is installed it is the default for the final result; the CLI and TUI fall back to the
+  librosa preview whenever it isn't.
 
 Your enharmonic spelling and Roman numerals are derived in TypeScript from `(key, root,
 quality)`; out-of-key chords get no Roman numeral (omitted, never invented).

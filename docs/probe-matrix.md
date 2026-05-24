@@ -130,3 +130,82 @@ poll for the child, then `q`.
 - This is the live confirmation of the standing automated chain: `tests/ts/cancel.test.tsx` (`q`'s
   `cancel()` flips the in-flight AbortSignal to aborted) → `tests/ts/engine.test.ts` ("kills the
   child on timeout — no orphan survives the grace window").
+
+## 7. BTC-ISMIR19 (permissive torch ACR) — ✅ PASS (2026-05-24)
+
+The de-risk for PLAN.md §2's anticipated "future permissive torch ACR model" that would replace
+madmom — raising real-recording accuracy **and** unlocking extended chords (the README's triads-only
+"can't") **and** dropping the NC-license burden, in one engine. Repo:
+[jayg996/BTC-ISMIR19](https://github.com/jayg996/BTC-ISMIR19), **MIT-licensed**, pretrained weights
+**committed** in-repo (`test/btc_model.pt` + `test/btc_model_large_voca.pt`, ~12 MB each — no LFS,
+no download). Ran entirely in a throwaway venv under `$CLAUDE_JOB_DIR` — **`engine/.venv` and
+`engine/uv.lock` were never touched.**
+
+**Environment that worked (CPU, no CUDA):**
+- Python **3.11.14**, isolated `uv` venv
+- **torch 2.12.0**, **numpy 2.4.6**, **librosa 0.11.0**, pyyaml / mir_eval / pretty_midi
+- Inference path does **not** import `pyrubberband` (the install-risk dep) — it's only in
+  `utils/preprocess.py`, used at training time. So no rubberband binary needed.
+
+**3 trivial 2019→modern compat patches were required** (all standard migrations; a real
+`btc_engine.py` would bake these in):
+1. `utils/hparams.py`: `yaml.load(f)` → `yaml.load(f, Loader=yaml.FullLoader)` (PyYAML ≥ 6).
+2. `np.float`/`np.int`/`np.bool` → builtins in `utils/transformer_modules.py` + `utils/chords.py`
+   (numpy ≥ 2 removed the aliases).
+3. `test.py`: `torch.load(model_file)` → `torch.load(model_file, map_location=device,
+   weights_only=False)` (weights saved on CUDA; torch ≥ 2.6 default flip).
+
+**Result — large vocabulary (`--voca True`, 170 chord classes) on the bundled `test/example.mp3`
+(257 s / 4.3 min, confirmed via ffprobe):**
+- End-to-end success; **~12 s wall time** on CPU (model load + librosa CQT dominate; the transformer
+  forward is sub-second). Comfortably inside the **20–60 s upgrade budget**.
+- Emits **extended chords** in MIREX label format (same family as madmom's `C:maj`/`A:min`, so it
+  maps onto the existing contract parsing). First lines of `example.lab`:
+  ```
+  0.000 2.685 N
+  2.685 4.074 F#:7
+  4.074 5.370 B:maj7
+  6.944 8.148 B:maj7
+  8.704 10.000 C#:min
+  12.870 13.148 A#:sus4
+  ```
+  `7` (dominant 7th), `maj7`, `min`, `sus4` — directly the triads-only limitation lifted. Silence →
+  explicit `N`, matching the contract.
+
+**Correctness sanity (`--voca False`, majmin) on a 16 s harmonic C–F–G–C synth:**
+`C → F → G → C`, boundaries at 3.889 / 7.963 / 11.944 s (the 4/8/12 s chord changes) — exact.
+
+**Edge case:** `audio_file_to_features` builds features in 10 s windows, so audio **< ~10 s** leaves
+a variable unbound (our 6.4 s fixture failed; real songs and the 16 s synth are fine). A
+`btc_engine.py` should pad/guard short inputs.
+
+**Open integration question (NOT resolved by this probe — the key follow-up):** the probe ran on
+py3.11 + numpy 2.4.6 + torch 2.12. The engine is pinned to **py3.9 + numpy<1.24 + scipy<1.13** for
+madmom. So BTC **cannot share `engine/.venv` with madmom** as-is (numpy 2 vs <1.24; torch is heavy).
+Two clean paths: (a) **BTC replaces madmom** — drops the py3.9/numpy<1.24 pin and the NC-license flow
+entirely (the highest-value option); or (b) a **per-engine venv** so `resolveEngine` points the
+madmom and BTC sidecars at different interpreters. Decide before building `btc_engine.py`.
+
+**Verdict: PASS — build `btc_engine.py` behind the existing `analyze.py --engine` contract** (a new
+engine module, no frontend rewrite), in a separate PR. Fallback if a blocker appears during
+integration: `autochord` (Apache-2.0, ~67%). Enabling extended chords additionally needs the contract
+widened (`vocabulary: "extended"`, quality enum) + roman numerals for 7ths in `music.ts` + the
+currently-disabled UI toggle.
+
+## 8. btc accuracy on GuitarSet (real audio) — ✅ MEASURED (2026-05-24)
+
+After building `btc_engine.py` (and retiring madmom), measured the engine on **GuitarSet**
+(CC-BY 4.0, https://zenodo.org/records/3371780) — 180 `_comp` excerpts of real solo acoustic
+guitar with time-aligned chord + key annotations. Harness: `tools/eval_guitarset.py` (mir_eval
+majmin WCSR for chords; chord-derived key vs `key_mode`), duration-weighted.
+
+**Result** (commit `6965b68`, `engine/.venv-btc`: torch 2.12 / librosa 0.11, py3.11):
+- chord majmin WCSR : **0.760**
+- key accuracy      : **0.844**  (chord-derived; librosa chroma-Krumhansl scored only 0.55 here —
+  hence the engine derives key from BTC's chords, not raw chroma)
+
+**Framing (important):** GuitarSet is *solo acoustic guitar* — **out of domain** for BTC, which was
+trained on pop full-mixes (published ~80.8% MIREX WCSR). So 0.76 is a domain-shifted floor, not a
+regression: the fidelity gate (§7, `tests/py/test_btc_fidelity.py`) proves we reproduce BTC's
+reference byte-for-byte, so the in-domain published number transfers. Reported here *separately*
+from the published figure, not averaged into it.

@@ -25,7 +25,7 @@ test("sparse (librosa): only chords is gated on; every advanced panel is hidden"
   });
 });
 
-test("full (madmom): every panel is visible", () => {
+test("full (btc): every panel is visible", () => {
   expect(visiblePanels(mock("full"))).toEqual({
     keyCandidates: true,
     beats: true,

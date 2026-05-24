@@ -2,14 +2,14 @@
 """Real analysis sidecar — the producer side of the JSON contract (src/core/types.ts).
 
 Usage:
-  analyze.py --engine librosa|madmom|essentia --file PATH [--json]
+  analyze.py --engine librosa|essentia|btc --file PATH [--json]
 
   stdout : exactly ONE JSON object — an Analysis, or {"error": {...}}.
   stderr : NDJSON progress events, one per pipeline stage.
   exit   : 0 ok / 2 bad input / 3 engine unavailable / 4 analysis-or-internal failure.
 
-librosa is the always-available clean core. madmom is opt-in (its NC, install-fragile package
-must be installed); essentia has no engine module yet. Both parse as valid choices but return
+librosa is the always-available clean core. btc is opt-in (its torch package must be installed
+into engine/.venv-btc); essentia has no engine module yet. Both parse as valid choices but return
 engine_unavailable (exit 3) when not actually usable. See is_available().
 """
 import argparse
@@ -33,10 +33,17 @@ from protocol import (  # noqa: E402
     write_result,
 )
 
-# engine name -> its analysis module. librosa ships in the clean core; madmom ships a module
-# but is usable only when its package is also installed (registry-gated, NOT import-gated:
-# the module existing on disk is necessary but not sufficient).
-ENGINE_MODULES = {"librosa": "engines.librosa_engine", "madmom": "engines.madmom_engine"}
+# engine name -> its analysis module. librosa ships in the clean core; btc ships a module but is
+# usable only when torch is also installed (registry-gated, NOT import-gated: the module existing
+# on disk is necessary but not sufficient).
+ENGINE_MODULES = {
+    "librosa": "engines.librosa_engine",
+    "btc": "engines.btc_engine",
+}
+
+# Opt-in engines gate on a third-party package being importable: btc gates on torch (its vendored
+# BTC-ISMIR19 model code ships in-repo under engine/vendor/btc).
+_ENGINE_PACKAGE = {"btc": "torch"}
 
 
 def is_available(engine):
@@ -48,7 +55,8 @@ def is_available(engine):
         return True  # clean core, always installed
     if importlib.util.find_spec(module) is None:
         return False
-    return importlib.util.find_spec(engine) is not None  # the underlying library (e.g. madmom)
+    package = _ENGINE_PACKAGE.get(engine, engine)
+    return importlib.util.find_spec(package) is not None  # the heavy lib (torch)
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):
@@ -63,7 +71,7 @@ class _ContractArgumentParser(argparse.ArgumentParser):
 
 def _parse_args(argv):
     p = _ContractArgumentParser(prog="analyze.py")
-    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia"])
+    p.add_argument("--engine", default="librosa", choices=["librosa", "essentia", "btc"])
     p.add_argument("--file", required=True)
     p.add_argument("--vocabulary", default="triads")  # accepted; triads-only at MVP
     p.add_argument("--json", action="store_true")  # stdout is always JSON; flag is a no-op

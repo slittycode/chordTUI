@@ -22,26 +22,27 @@ process.on("uncaughtException", (err) => {
   process.stderr.write(`Fatal: ${err instanceof Error ? err.stack ?? err.message : String(err)}\n`);
 });
 
-const ENGINE_NAMES: readonly string[] = ["librosa", "madmom", "essentia"];
+const ENGINE_NAMES: readonly string[] = ["librosa", "btc", "essentia"];
 
-const HELP = `chord — terminal chord / key / progression detector (contract v${CURRENT_CONTRACT_VERSION})
+const HELP = `chordtui — terminal chord / key / progression detector (contract v${CURRENT_CONTRACT_VERSION})
 
 Usage:
-  chord analyze <file> [--engine librosa|madmom|essentia] [--json] [--no-cache]
+  chordtui analyze <file> [--engine librosa|btc] [--json] [--no-cache]
                          analyze an audio file (key + chords + progression)
-  chord engine-info [--engine X] [--json]
+  chordtui engine-info [--engine X] [--json]
                          print the engine's capabilities / versions
-  chord doctor           per-engine table: installed / working (ran on a WAV) / license / default
-  chord setup [--engine librosa|madmom|essentia] [--no-madmom] [--accept-noncommercial]
-                         install the clean librosa core; with consent, also install madmom
-  chord                  launch the interactive TUI
-  chord --help           show this help
+  chordtui doctor        per-engine table: installed / working (ran on a WAV) / license / default
+  chordtui setup [--engine librosa|btc] [--no-btc]
+                         install the clean librosa core; by default also install the btc engine
+  chordtui               launch the interactive TUI
+  chordtui --help        show this help
 
 Notes:
-  • Without --engine, analyze uses madmom when installed AND consented, else librosa.
+  • \`chord\` is an alias for \`chordtui\` (both are installed by \`bun link\`).
+  • Without --engine, analyze uses btc (extended chords, ~80% accuracy) when installed, else librosa.
   • Results are cached per audio file + engine; re-runs are instant (--no-cache to skip).
   • With no real engine installed, analyze uses a bundled MOCK (sample data) only in an
-    interactive terminal; piped / --json output refuses (run \`chord setup\`).`;
+    interactive terminal; piped / --json output refuses (run \`chordtui setup\`).`;
 
 interface ParsedFlags {
   positionals: string[];
@@ -120,7 +121,7 @@ async function main(): Promise<number> {
       const file = f.positionals[0];
       if (!file) {
         process.stderr.write(
-          "Usage: chord analyze <file> [--engine librosa|madmom|essentia] [--json] [--no-cache]\n",
+          "Usage: chord analyze <file> [--engine librosa|btc] [--json] [--no-cache]\n",
         );
         return 2;
       }
@@ -144,7 +145,7 @@ async function main(): Promise<number> {
       return cmdDoctor({});
 
     case "setup":
-      return cmdSetup({ argv: rest, isTTY: process.stdout.isTTY === true });
+      return cmdSetup({ argv: rest });
 
     default:
       process.stderr.write(`Unknown command: "${command}"\nRun "chord --help".\n`);

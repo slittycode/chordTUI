@@ -3,8 +3,7 @@ name = "chordtui-engine"
 version = "0.0.0"
 description = "chordTUI audio-analysis sidecar (key / chords / progression)"
 requires-python = ">=3.9,<3.10"
-# Clean core only — ISC/BSD/MIT family. Pinned to madmom-compatible ceilings so the
-# opt-in madmom tier can layer into the same venv without a numpy/scipy downgrade.
+# Clean core only — ISC/BSD/MIT family. The lean, always-installs preview + fallback tier (py3.9).
 dependencies = [
     "numpy<1.24",
     "scipy<1.13",
@@ -12,11 +11,12 @@ dependencies = [
     "soundfile",
 ]
 
-# Opt-in accuracy engines are installed by `chord setup --engine X`, NOT via uv extras,
-# so they never enter this lock (keeping the default install license-clean):
-#   madmom   : uv pip install --no-build-isolation "madmom==0.16.1" "cython<3"
-#              (code BSD; pretrained models are CC-BY-NC-SA 4.0 — NonCommercial). See docs/probe-matrix.md.
-#   essentia : uv pip install "essentia"   (AGPL-3.0)
+# The opt-in accuracy tier is installed by `chord setup` into a SEPARATE venv (engine/.venv-btc),
+# NOT via uv extras, so heavy/extra deps never enter this clean-core lock:
+#   btc      : torch + librosa (py3.11) running the vendored MIT BTC-ISMIR19 model
+#              (engine/vendor/btc). Permissive end to end — no NonCommercial consent. See
+#              docs/probe-matrix.md §7. resolveEngine prefers .venv-btc when present.
+#   essentia : uv pip install "essentia"   (AGPL-3.0) — reserved, not implemented
 
 [dependency-groups]
 dev = ["pytest", "ruff", "jsonschema"]
@@ -26,6 +26,8 @@ package = false
 
 [tool.ruff]
 line-length = 100
+# Vendored third-party code (BTC-ISMIR19, MIT) is kept verbatim — don't lint it.
+extend-exclude = ["vendor"]
 
 [tool.pytest.ini_options]
 testpaths = ["../tests/py"]

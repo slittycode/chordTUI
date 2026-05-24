@@ -99,24 +99,49 @@ const MINOR_ROWS: RomanRow[] = [
   { interval: 10, quality: "maj", numeral: "VII" },
 ];
 
+// Extended (btc large-voca) qualities → the base triad used for the diatonic degree lookup, plus
+// a numeral suffix. So a diatonic seventh keeps its degree and shows the extension: G7 in C → V7,
+// Dm7 in C → ii7, Cmaj7 → Imaj7. dim / aug / sus2 / sus4 and the (half-)diminished sevenths are
+// intentionally absent — their degree is ambiguous or chromatic, so we omit the numeral rather
+// than invent one (PLAN.md §3, same discipline as out-of-key chords).
+const EXTENDED_BASE: Record<string, { base: "maj" | "min"; suffix: string }> = {
+  maj6: { base: "maj", suffix: "6" },
+  maj7: { base: "maj", suffix: "maj7" },
+  "7": { base: "maj", suffix: "7" }, // dominant seventh (major triad + ♭7)
+  min6: { base: "min", suffix: "6" },
+  min7: { base: "min", suffix: "7" },
+  minmaj7: { base: "min", suffix: "maj7" },
+};
+
 /**
- * In-key roman numeral for a maj/min triad, or null when out-of-key or unknown. Returns
- * null for non-triad qualities (incl. "N"), unparseable root/tonic, and any chord whose
- * (degree, quality) is not diatonic — we omit rather than invent (PLAN.md §3).
+ * In-key roman numeral for a chord, or null when out-of-key or unknown. Handles maj/min triads
+ * and the common diatonic sevenths/sixths (V7, ii7, Imaj7, …); returns null for "N", unparseable
+ * root/tonic, dim/aug/sus and (half-)diminished sevenths, and any chord whose (degree, base
+ * triad) is not diatonic — we omit rather than invent (PLAN.md §3).
  */
 export function romanNumeral(
   root: string | null,
   quality: string,
   key: KeyContext,
 ): string | null {
-  if (root === null || (quality !== "maj" && quality !== "min")) return null;
+  if (root === null) return null;
+  let base: "maj" | "min";
+  let suffix = "";
+  if (quality === "maj" || quality === "min") {
+    base = quality;
+  } else {
+    const ext = EXTENDED_BASE[quality];
+    if (!ext) return null; // N, dim, aug, sus, dim7, hdim7 → no numeral
+    base = ext.base;
+    suffix = ext.suffix;
+  }
   const r = noteToPc(root);
   const t = noteToPc(key.tonic);
   if (r === null || t === null) return null;
   const interval = (((r - t) % 12) + 12) % 12;
   const rows = key.mode === "major" ? MAJOR_ROWS : MINOR_ROWS;
-  const row = rows.find((x) => x.interval === interval && x.quality === quality);
-  return row ? row.numeral : null;
+  const row = rows.find((x) => x.interval === interval && x.quality === base);
+  return row ? row.numeral + suffix : null;
 }
 
 /** A maximal run of consecutive segments sharing the same (root, quality). */

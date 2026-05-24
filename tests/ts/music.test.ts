@@ -118,7 +118,25 @@ test("romanNumeral omits out-of-key / unknown chords (never invents)", () => {
   expect(romanNumeral("B", "maj", k)).toBeNull(); // wrong quality at degree (would be vii°)
   expect(romanNumeral("C", "N", k)).toBeNull(); // no-chord
   expect(romanNumeral(null, "maj", k)).toBeNull();
-  expect(romanNumeral("C", "dim", k)).toBeNull(); // non-triad quality
+});
+
+test("romanNumeral — diatonic extended chords (btc large-voca) keep degree + extension", () => {
+  const k = { tonic: "C", mode: "major" } as const;
+  expect(romanNumeral("G", "7", k)).toBe("V7"); // dominant seventh
+  expect(romanNumeral("C", "maj7", k)).toBe("Imaj7");
+  expect(romanNumeral("F", "maj7", k)).toBe("IVmaj7");
+  expect(romanNumeral("D", "min7", k)).toBe("ii7");
+  expect(romanNumeral("A", "min7", k)).toBe("vi7");
+  expect(romanNumeral("A", "min6", k)).toBe("vi6");
+});
+
+test("romanNumeral — ambiguous/chromatic extended qualities are omitted (never invented)", () => {
+  const k = { tonic: "C", mode: "major" } as const;
+  expect(romanNumeral("G", "sus4", k)).toBeNull();
+  expect(romanNumeral("C", "dim", k)).toBeNull();
+  expect(romanNumeral("C", "aug", k)).toBeNull();
+  expect(romanNumeral("B", "hdim7", k)).toBeNull(); // vii half-dim — omitted by design
+  expect(romanNumeral("C#", "7", k)).toBeNull(); // out of key even as a dominant
 });
 
 // ── collapseProgression ─────────────────────────────────────────────

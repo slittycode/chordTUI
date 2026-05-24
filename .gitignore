@@ -4,8 +4,8 @@ dist/
 *.tsbuildinfo
 .DS_Store
 
-# Python engine (uv-managed)
-engine/.venv/
+# Python engine (uv-managed) — clean core (.venv) and the opt-in torch tier (.venv-btc)
+engine/.venv*/
 __pycache__/
 *.pyc
 .uv-cache/

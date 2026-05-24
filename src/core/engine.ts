@@ -19,7 +19,7 @@ import { EXIT, ENGINE_STAGES } from "./types";
 import type { Analysis, EngineError, EngineEvent, EngineInfoResponse, EngineStage } from "./types";
 import { ContractError, parseEngineOutput, validateEngineInfo } from "./validate";
 
-const DEFAULT_TIMEOUT_MS = 120_000; // generous: madmom can take 20–60s on a full song
+const DEFAULT_TIMEOUT_MS = 120_000; // generous: btc takes ~12s on a full song (CQT-bound)
 const DEFAULT_GRACE_MS = 3_000; // SIGTERM → SIGKILL window (matches tempo's daemon)
 const DEFAULT_MAX_STDOUT_BYTES = 64 * 1024 * 1024; // safety valve; a real Analysis is tiny
 

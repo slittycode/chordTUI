@@ -68,10 +68,10 @@ test("upgrade happy path: STARTED → DONE swaps in the upgrade (isPreview false
   s = analysisReducer(s, { type: "UPGRADE_STARTED", runId: 1 });
   expect(s.phase).toBe("running-upgrade");
   expect(s.isPreview).toBe(true);
-  s = analysisReducer(s, { type: "UPGRADE_DONE", runId: 1, analysis: mkAnalysis("madmom") });
+  s = analysisReducer(s, { type: "UPGRADE_DONE", runId: 1, analysis: mkAnalysis("btc") });
   expect(s.phase).toBe("done-upgrade");
   expect(s.isPreview).toBe(false);
-  expect(s.analysis?.engine.name).toBe("madmom");
+  expect(s.analysis?.engine.name).toBe("btc");
 });
 
 test("UPGRADE_FAILED keeps the preview and records an upgradeNote (the live MVP path)", () => {
@@ -81,7 +81,7 @@ test("UPGRADE_FAILED keeps the preview and records an upgradeNote (the live MVP 
   expect(s.phase).toBe("done-preview");
   expect(s.isPreview).toBe(true);
   expect(s.analysis).not.toBeNull(); // preview kept
-  expect(s.upgradeNote).toContain("madmom unavailable");
+  expect(s.upgradeNote).toContain("btc unavailable");
   expect(s.error).toBeNull();
 });
 
