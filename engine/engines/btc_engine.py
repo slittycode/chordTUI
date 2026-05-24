@@ -193,7 +193,7 @@ def _gap_free(lines, duration):
 
     BTC's segments don't start at 0, end exactly at duration, or guarantee no gaps; the contract
     (validate.ts) requires all three, with silence/unknown as explicit "N". Mirrors the stitch
-    discipline used by the librosa/madmom engines.
+    discipline used by the librosa engine.
     """
     raw = []
     for ln in lines:

@@ -2,14 +2,14 @@
 """Real analysis sidecar — the producer side of the JSON contract (src/core/types.ts).
 
 Usage:
-  analyze.py --engine librosa|madmom|essentia --file PATH [--json]
+  analyze.py --engine librosa|essentia|btc --file PATH [--json]
 
   stdout : exactly ONE JSON object — an Analysis, or {"error": {...}}.
   stderr : NDJSON progress events, one per pipeline stage.
   exit   : 0 ok / 2 bad input / 3 engine unavailable / 4 analysis-or-internal failure.
 
-librosa is the always-available clean core. madmom is opt-in (its NC, install-fragile package
-must be installed); essentia has no engine module yet. Both parse as valid choices but return
+librosa is the always-available clean core. btc is opt-in (its torch package must be installed
+into engine/.venv-btc); essentia has no engine module yet. Both parse as valid choices but return
 engine_unavailable (exit 3) when not actually usable. See is_available().
 """
 import argparse
@@ -56,7 +56,7 @@ def is_available(engine):
     if importlib.util.find_spec(module) is None:
         return False
     package = _ENGINE_PACKAGE.get(engine, engine)
-    return importlib.util.find_spec(package) is not None  # the heavy lib (madmom / torch)
+    return importlib.util.find_spec(package) is not None  # the heavy lib (torch)
 
 
 class _ContractArgumentParser(argparse.ArgumentParser):

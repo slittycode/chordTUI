@@ -351,7 +351,7 @@ export function renderDoctorTable(rows: DoctorEngineRow[]): string {
 export type RunSelftest = (engine: EngineName) => Promise<SelftestResult>;
 
 // Static license map (the engines never report their own licence over the contract; this is
-// metadata the frontend owns). `default` is decided at render time: madmom if it works, else librosa.
+// metadata the frontend owns). `default` is decided at render time: btc if it works, else librosa.
 const ENGINE_TIERS: { engine: EngineName; license: string }[] = [
   { engine: "librosa", license: "ISC" },
   { engine: "btc", license: "MIT" },
@@ -369,7 +369,7 @@ async function defaultRunSelftest(
       stdout: "pipe",
       stderr: "pipe",
     });
-    const timer = setTimeout(() => proc.kill(), 60_000); // madmom's CNN model load is slow
+    const timer = setTimeout(() => proc.kill(), 60_000); // btc's torch model load is slow
     const [out, errText] = await Promise.all([
       new Response(proc.stdout).text(),
       new Response(proc.stderr).text(),

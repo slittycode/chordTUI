@@ -5,7 +5,7 @@ Decodes no audio. Prints an EngineInfoResponse (engine/engine-info.schema.json) 
 frontend can build cache keys and discover capabilities without a full analysis.
 
 Usage:
-  engine_info.py --engine librosa|madmom|essentia [--json]
+  engine_info.py --engine librosa|essentia|btc [--json]
 
   exit 0 + EngineInfoResponse on stdout for an available engine; exit 3 + an
   engine_unavailable envelope for one that is not installed.

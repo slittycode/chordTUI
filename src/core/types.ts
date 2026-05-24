@@ -31,7 +31,7 @@ export interface EngineInfo {
   version: string;
   license: string; // "ISC" | "CC-BY-NC-SA-4.0" | "AGPL-3.0"
   modelVersions: Record<string, string>; // {} when rule-based (librosa)
-  confidenceKind: ConfidenceKind; // posterior=madmom, correlation=librosa key, heuristic=essentia
+  confidenceKind: ConfidenceKind; // correlation=librosa/btc key, posterior/heuristic reserved
 }
 
 /**
