@@ -24,7 +24,7 @@ const CONTRACT_MAJOR_RE = /^1\.\d+\.\d+$/;
 const EPS = 1e-6;
 
 const CONFIDENCE_KINDS: ConfidenceKind[] = ["posterior", "correlation", "heuristic"];
-const ENGINE_NAMES: EngineName[] = ["librosa", "madmom", "essentia"];
+const ENGINE_NAMES: EngineName[] = ["librosa", "madmom", "essentia", "btc"];
 const ERROR_KINDS: EngineError["kind"][] = [
   "bad_input",
   "decode_failed",
@@ -241,8 +241,10 @@ export function validateAnalysis(input: unknown): Analysis {
   const engine = validateEngine(input["engine"]);
   const engineCapabilities = validateCapabilities(input["engineCapabilities"], "engineCapabilities");
 
-  const vocabulary = reqStr(input, "vocabulary", "root");
-  if (vocabulary !== "triads") fail(`"vocabulary" must be "triads" at MVP, got "${vocabulary}"`);
+  const vocabulary = reqStr(input, "vocabulary", "root") as "triads" | "extended";
+  if (vocabulary !== "triads" && vocabulary !== "extended") {
+    fail(`"vocabulary" must be "triads" or "extended", got "${vocabulary}"`);
+  }
 
   const key = validateKey(input["key"], "key");
 
@@ -272,7 +274,7 @@ export function validateAnalysis(input: unknown): Analysis {
     durationSec,
     engine,
     engineCapabilities,
-    vocabulary: "triads",
+    vocabulary,
     key,
     keyCandidates,
     chords,

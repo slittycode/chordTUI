@@ -60,12 +60,24 @@ def _madmom_info():
     }
 
 
-_INFO = {"librosa": _librosa_info, "madmom": _madmom_info}
+def _btc_info():
+    # Reuse the engine's block so engine-info and analyze report identical version + modelVersions
+    # (the cache staleness check depends on it). Advertises the large-voca (extended) default.
+    from engines.btc_engine import engine_block
+
+    return {
+        **engine_block(large_voca=True),
+        "contractVersion": CONTRACT_VERSION,
+        "capabilities": ["key", "chords"],
+    }
+
+
+_INFO = {"librosa": _librosa_info, "madmom": _madmom_info, "btc": _btc_info}
 
 
 def run(argv):
     p = _ContractArgumentParser(prog="engine_info.py")
-    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia"])
+    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia", "btc"])
     p.add_argument("--json", action="store_true")
     args = p.parse_args(argv)
 

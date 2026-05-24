@@ -72,7 +72,7 @@ class _ContractArgumentParser(argparse.ArgumentParser):
 
 def _parse_args(argv):
     p = _ContractArgumentParser(prog="analyze.py")
-    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia"])
+    p.add_argument("--engine", default="librosa", choices=["librosa", "madmom", "essentia", "btc"])
     p.add_argument("--file", required=True)
     p.add_argument("--vocabulary", default="triads")  # accepted; triads-only at MVP
     p.add_argument("--json", action="store_true")  # stdout is always JSON; flag is a no-op

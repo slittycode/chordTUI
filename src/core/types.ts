@@ -24,7 +24,7 @@ export type EngineCapability =
 
 export type ConfidenceKind = "posterior" | "correlation" | "heuristic";
 
-export type EngineName = "librosa" | "madmom" | "essentia";
+export type EngineName = "librosa" | "madmom" | "essentia" | "btc";
 
 export interface EngineInfo {
   name: EngineName;
@@ -61,7 +61,7 @@ export interface ChordSegment {
   end: number; // seconds, exclusive; segment[i].end === segment[i+1].start
   label: string; // "C", "Am", "N"
   root: string | null; // null only when label === "N"
-  quality: "maj" | "min" | "N" | string; // triads at MVP; string allows future vocab
+  quality: "maj" | "min" | "N" | string; // triads, or extended labels (maj7/7/min7/sus4/…) from btc
   confidence: number | null; // null = engine exposes no per-segment confidence
 }
 
@@ -71,7 +71,7 @@ export interface Analysis {
   durationSec: number;
   engine: EngineInfo;
   engineCapabilities: EngineCapability[]; // drives which panels render
-  vocabulary: "triads"; // "extended" refused at MVP
+  vocabulary: "triads" | "extended"; // "extended" = 7ths/sus/etc. (btc large-voca)
   key: KeyResult;
 
   // ---- Nullable advanced fields (null = engine could not compute) ----

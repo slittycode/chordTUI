@@ -203,7 +203,7 @@ def _key(path):
 # `vocabulary="triads"` (default for now) selects the majmin model — contract-safe while the
 # extended-chord widening lands; `vocabulary="extended"` selects the 170-class large-voca model
 # (7ths/sus/etc.), which becomes the default once the contract supports it.
-def analyze(path, on_stage=lambda s: None, vocabulary="triads"):
+def analyze(path, on_stage=lambda s: None, vocabulary="extended"):
     """Run BTC chord recognition + librosa key; return a contract Analysis dict."""
     large_voca = vocabulary != "triads"
 
